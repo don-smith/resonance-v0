@@ -38,5 +38,5 @@ decisions:
     priority: P1
   - title: Prezzos
     plan: plans/prezzos.md
-    status: is-ready
+    status: in-progress
     priority: P3

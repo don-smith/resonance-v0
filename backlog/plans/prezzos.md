@@ -1,6 +1,6 @@
 # Prezzos
 
-Owner: team
+Owner: member
 
 ## Context
 
