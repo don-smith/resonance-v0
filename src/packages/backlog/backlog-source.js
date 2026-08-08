@@ -8,7 +8,7 @@ function escapeHtml(value) {
 const statuses = ['recently-done', 'in-progress', 'is-ready', 'in-planning'];
 const priorities = ['P0', 'P1', 'P2', 'P3'];
 
-export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (url) => typeof EventSource === 'function' ? new EventSource(url) : null } = {}) {
+export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (url) => typeof EventSource === 'function' ? new EventSource(url) : null, confirmFn = (message) => typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(message) : false } = {}) {
   let root;
   let items = [];
   let selectedPath = null;
@@ -29,6 +29,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
   let retryButton;
   let confirmationPanel;
   let confirmButton;
+  let deleteButton;
   let eventSource = null;
   let active = false;
   let planRequest = 0;
@@ -164,6 +165,18 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Decision metadata could not be updated.');
     if (selectedPath === path) await loadItems();
   }
+  async function deletePlan() {
+    const path = selectedPath;
+    if (!path) return;
+    const title = items.find((item) => item.path === path)?.title || path;
+    if (!confirmFn(`Delete “${title}”? This removes the plan and its backlog entry.`)) return;
+    deleteButton.disabled = true;
+    try {
+      const response = await fetchFn('/api/backlog/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Plan could not be deleted.');
+      await loadItems();
+    } finally { deleteButton.disabled = !selectedPath; }
+  }
   async function showPlan(itemPath) {
     const request = ++planRequest;
     content.innerHTML = '<p class="backlog-loading">Loading plan…</p>';
@@ -172,6 +185,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     const plan = await response.json();
     if (!active || request !== planRequest) return;
     selectedPath = plan.path;
+    deleteButton.disabled = false;
     pathLabel.textContent = plan.path;
     renderItems();
     const selectedItem = items.find((item) => item.path === plan.path);
@@ -188,7 +202,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     renderItems();
     const selected = items.find((item) => item.path === selectedPath) || items.find((item) => item.status !== 'recently-done') || items[0];
     if (selected) await showPlan(selected.path);
-    else { selectedPath = null; pathLabel.textContent = 'backlog'; content.innerHTML = '<p class="backlog-empty">No linked plans are available.</p>'; renderTranscript(); }
+    else { selectedPath = null; deleteButton.disabled = true; pathLabel.textContent = 'backlog'; content.innerHTML = '<p class="backlog-empty">No linked plans are available.</p>'; renderTranscript(); }
   }
   function queueRefresh(revision) {
     refreshRequested = Math.max(refreshRequested, Number(revision) || refreshRequested + 1);
@@ -244,8 +258,8 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
   return {
     mount(mountRoot) {
       root = mountRoot;
-      root.innerHTML = '<section class="backlog-workspace" aria-label="Backlog"><aside class="backlog-list"><p class="eyebrow">WORKSPACE</p><h2>Backlog</h2><nav class="backlog-items" aria-label="Decisions"></nav></aside><article class="backlog-plan"><header><span>PLAN</span><span class="backlog-rule" aria-hidden="true"></span><span class="backlog-path">backlog</span><button type="button" class="backlog-agent-toggle" aria-controls="backlog-agent-panel" aria-expanded="true" aria-label="Hide agent panel" title="Hide agent panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"></path></svg></button></header><div class="backlog-content" aria-live="polite"></div></article><div class="backlog-agent-slot"></div></section>';
-      workspace = root.querySelector('.backlog-workspace'); list = root.querySelector('.backlog-items'); content = root.querySelector('.backlog-content'); pathLabel = root.querySelector('.backlog-path'); agentUi.mount(root.querySelector('.backlog-agent-slot')); agentPanel = agentUi.root; agentToggle = root.querySelector('.backlog-agent-toggle'); transcript = root.querySelector('.backlog-transcript'); statusLabel = root.querySelector('.backlog-status'); promptInput = root.querySelector('.backlog-composer textarea'); sendButton = root.querySelector('.backlog-composer button[type="submit"]'); credentialPanel = root.querySelector('.backlog-credential'); credentialInput = credentialPanel.querySelector('input'); retryButton = root.querySelector('.backlog-retry'); agentUi.auxiliary.innerHTML = '<div class="backlog-confirmation" hidden><p class="backlog-confirmation-title"></p><button type="button" class="backlog-confirm-delete">Confirm deletion</button></div>'; confirmationPanel = root.querySelector('.backlog-confirmation'); confirmButton = root.querySelector('.backlog-confirm-delete');
+      root.innerHTML = '<section class="backlog-workspace" aria-label="Backlog"><aside class="backlog-list"><p class="eyebrow">WORKSPACE</p><h2>Backlog</h2><nav class="backlog-items" aria-label="Decisions"></nav></aside><article class="backlog-plan"><header><span>PLAN</span><span class="backlog-rule" aria-hidden="true"></span><span class="backlog-path">backlog</span><button type="button" class="backlog-delete-plan" aria-label="Delete plan" title="Delete plan" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h8l1-13M10 11v6m4-6v6"></path></svg></button><button type="button" class="backlog-agent-toggle" aria-controls="backlog-agent-panel" aria-expanded="true" aria-label="Hide agent panel" title="Hide agent panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"></path></svg></button></header><div class="backlog-content" aria-live="polite"></div></article><div class="backlog-agent-slot"></div></section>';
+      workspace = root.querySelector('.backlog-workspace'); list = root.querySelector('.backlog-items'); content = root.querySelector('.backlog-content'); pathLabel = root.querySelector('.backlog-path'); agentUi.mount(root.querySelector('.backlog-agent-slot')); agentPanel = agentUi.root; deleteButton = root.querySelector('.backlog-delete-plan'); agentToggle = root.querySelector('.backlog-agent-toggle'); transcript = root.querySelector('.backlog-transcript'); statusLabel = root.querySelector('.backlog-status'); promptInput = root.querySelector('.backlog-composer textarea'); sendButton = root.querySelector('.backlog-composer button[type="submit"]'); credentialPanel = root.querySelector('.backlog-credential'); credentialInput = credentialPanel.querySelector('input'); retryButton = root.querySelector('.backlog-retry'); agentUi.auxiliary.innerHTML = '<div class="backlog-confirmation" hidden><p class="backlog-confirmation-title"></p><button type="button" class="backlog-confirm-delete">Confirm deletion</button></div>'; confirmationPanel = root.querySelector('.backlog-confirmation'); confirmButton = root.querySelector('.backlog-confirm-delete');
       setAgentVisible(agentVisible);
       list.addEventListener('click', async (event) => {
         const toggle = event.target.closest('[data-backlog-group-toggle]');
@@ -261,6 +275,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
       });
       content.addEventListener('change', (event) => { const select = event.target.closest('[data-metadata-field]'); if (!select || !content.contains(select)) return; void updateMetadata(select.dataset.metadataField, select.value).catch(showError); });
       confirmButton.addEventListener('click', () => { void confirmDeletion().catch(showError); });
+      deleteButton.addEventListener('click', () => { void deletePlan().catch(showError); });
       agentToggle.addEventListener('click', () => setAgentVisible(!agentVisible));
       renderItems(); renderTranscript();
     },

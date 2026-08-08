@@ -142,6 +142,17 @@ export function createBacklogPackage({ runtimeFactory }: { runtimeFactory?: Back
             },
           },
           {
+            method: 'POST', path: '/api/backlog/delete', handler: async (request, response) => {
+              try {
+                const body = await request.readJson<{ path?: unknown }>(8 * 1024);
+                if (!isRecord(body) || typeof body.path !== 'string' || !body.path.trim()) {
+                  response.json(400, { error: 'path must be a non-empty string.' }); return;
+                }
+                response.json(200, await store.deleteDecision(body.path));
+              } catch (error) { sendError(response, error, telemetry); }
+            },
+          },
+          {
             method: 'POST', path: '/api/backlog/metadata', handler: async (request, response) => {
               try {
                 const body = await request.readJson<{ path?: unknown; status?: unknown; priority?: unknown }>(8 * 1024);

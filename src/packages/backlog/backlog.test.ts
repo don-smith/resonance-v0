@@ -71,6 +71,26 @@ test('serves sorted contained decisions through the renamed package', async () =
   }
 });
 
+test('deletes a linked plan and its decision through the package route', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'resonance-backlog-delete-'));
+  try {
+    await mkdir(path.join(root, 'backlog', 'plans'), { recursive: true });
+    await writeFile(path.join(root, 'backlog', 'todo.yaml'), valid);
+    await writeFile(path.join(root, 'backlog', 'plans', 'queue.md'), '# Queue');
+    await withServer(async (base) => {
+      assert.equal((await fetch(`${base}/api/backlog/delete`, { method: 'GET' })).status, 405);
+      const invalid = await fetch(`${base}/api/backlog/delete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({}) });
+      assert.equal(invalid.status, 400);
+      const deletion = await fetch(`${base}/api/backlog/delete`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: 'backlog/plans/queue.md' }) });
+      assert.equal(deletion.status, 200);
+      assert.deepEqual(await deletion.json(), { affectedPaths: ['backlog/todo.yaml', 'backlog/plans/queue.md'] });
+      assert.deepEqual((await fetch(`${base}/api/backlog/items`).then((response) => response.json())).items, []);
+      await assert.rejects(() => readFile(path.join(root, 'backlog', 'plans', 'queue.md')));
+      assert.match(await readFile(path.join(root, 'backlog', 'todo.yaml'), 'utf8'), /decisions: \[\]/);
+    }, root);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('distinguishes invalid and escaping sources', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-backlog-'));
   const outside = await mkdtemp(path.join(tmpdir(), 'resonance-backlog-outside-'));
@@ -126,6 +146,8 @@ test('keeps plan and agent header separators aligned', async () => {
   assert.match(sharedCss, /\.resonance-agent-header \{[^}]*padding: 28px 20px 20px;/s);
   assert.match(css, /\.backlog-agent-toggle \{[^}]*border: 1px solid transparent;/s);
   assert.match(css, /\.backlog-agent-toggle \{[^}]*color: var\(--muted\);/s);
+  assert.match(css, /\.backlog-delete-plan \{[^}]*right: 92px;/s);
+  assert.match(css, /\.backlog-delete-plan:hover:not\(:disabled\)[^}]*color: var\(--danger\);/s);
   assert.match(css, /\.backlog-agent-toggle\[aria-expanded="true"\] \{[^}]*color: var\(--accent\);/s);
   assert.match(css, /\.backlog-agent-toggle:hover, \.backlog-agent-toggle:focus-visible \{[^}]*color: var\(--ink\);/s);
   assert.match(css, /\.backlog-agent-toggle svg \{[^}]*stroke: currentColor;/s);
@@ -189,6 +211,35 @@ test('renders editable priority and status controls and refreshes the decision l
   assert.deepEqual(updates, [{ path: 'backlog/plans/queue.md', priority: 'P0' }]);
   assert.equal(root.querySelector('.backlog-metadata-priority').value, 'P0');
   assert.equal(root.querySelector('.backlog-item .backlog-priority').textContent, 'P0');
+  instance.deactivate();
+});
+
+test('confirms and deletes the selected plan from the plan header', async () => {
+  const { document } = parseHTML('<!doctype html><body></body>');
+  const root = document.createElement('section');
+  const items: any[] = [{ title: 'Queue', path: 'backlog/plans/queue.md', status: 'in-planning', priority: 'P2' }];
+  const requests: any[] = [];
+  const confirmations: string[] = [];
+  const instance = createBacklog({
+    confirmFn: (message) => { confirmations.push(message); return true; },
+    fetchFn: async (url, options) => {
+      requests.push({ url, options });
+      if (url === '/api/backlog/items') return { ok: true, async json() { return { items: items.map((item) => ({ ...item })) }; } };
+      if (url.startsWith('/api/backlog/plan')) return { ok: true, async json() { return { ...items[0], html: '<h1>Queue</h1>' }; } };
+      if (url === '/api/backlog/delete') { items.splice(0, 1); return { ok: true, async json() { return { affectedPaths: ['backlog/todo.yaml', 'backlog/plans/queue.md'] }; } }; }
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+  instance.mount(root); await instance.activate();
+  const deleteButton = root.querySelector('.backlog-delete-plan') as HTMLButtonElement;
+  assert.equal(deleteButton.disabled, false);
+  deleteButton.click(); await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(confirmations, ['Delete “Queue”? This removes the plan and its backlog entry.']);
+  const deletion = requests.find((request) => request.url === '/api/backlog/delete');
+  assert.equal(deletion.options.method, 'POST');
+  assert.deepEqual(JSON.parse(deletion.options.body), { path: 'backlog/plans/queue.md' });
+  assert.equal(deleteButton.disabled, true);
+  assert.match(root.querySelector('.backlog-content').textContent, /No linked plans/);
   instance.deactivate();
 });
 

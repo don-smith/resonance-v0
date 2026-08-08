@@ -21,6 +21,7 @@ The provider and model are non-secret package inputs. `openai` and the OpenAI-co
 - `GET /api/backlog/items` returns the ordered, physically contained Decisions projection.
 - `GET /api/backlog/plan?path=...` re-authorizes and renders one canonical linked plan with its metadata.
 - `POST /api/backlog/metadata` deterministically updates a decision's status and/or priority.
+- `POST /api/backlog/delete` deletes a decision's linked plan and YAML entry after browser confirmation.
 - `GET /api/backlog/agent/state` returns non-secret conversation state.
 - `GET /api/backlog/agent/events` is a snapshot-first SSE stream.
 - `POST /api/backlog/agent/prompt` accepts `{ prompt, selectedPath }`.
@@ -38,4 +39,4 @@ Each conversation has a stable telemetry session identity. Backlog records compl
 
 The agent receives a freshly re-read selected decision on every prompt. Its virtual filesystem exposes the packaged management skill plus read-only listing, reading, glob, and grep access across the viewed repository, allowing it to use documentation and implementation evidence when preparing or relating decisions. Repository symlinks, Git internals, and credential files are unavailable, reads are bounded, and generic filesystem writes remain denied. Domain tools enforce canonical Backlog paths, YAML validation, repository containment, serialized mutations, atomic individual replacements, and compensating rollback. The agent can review, create, edit plans, change status or priority, and request deletion. New decisions use a deterministic `plans/<kebab-case-title>.md` path derived by the domain tool; callers do not choose the plan path. Deletion always requires a visible browser confirmation and a chat request alone has no destructive effect.
 
-Committed mutations emit a revision and affected canonical paths. The browser then re-reads the YAML and plan from disk rather than applying optimistic changes; the plan metadata controls use the same canonical store for deterministic status and priority changes. Shell, credential inspection, network access, persistence, and cross-process transactionality remain non-goals.
+Committed mutations emit a revision and affected canonical paths. The browser then re-reads the YAML and plan from disk rather than applying optimistic changes; the plan metadata controls use the same canonical store for deterministic status and priority changes. The plan view's delete button requires explicit browser confirmation before calling the direct deletion route. Shell, credential inspection, network access, persistence, and cross-process transactionality remain non-goals.
