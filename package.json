@@ -13,7 +13,8 @@
     "test": "bun test",
     "build:architecture": "bun build src/packages/architecture/architecture-source.js --outfile src/packages/architecture/architecture.js --target browser --format esm --minify",
     "build:backlog": "bun build src/packages/backlog/backlog-source.js --outfile src/packages/backlog/backlog.js --target browser --format esm --minify",
-    "build:browser": "bun run build:backlog && bun run build:architecture",
+    "build:doctor": "bun build src/packages/doctor/doctor-source.js --outfile src/packages/doctor/doctor.js --target browser --format esm --minify",
+    "build:browser": "bun run build:backlog && bun run build:architecture && bun run build:doctor",
     "resonate": "resonate"
   },
   "dependencies": {

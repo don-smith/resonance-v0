@@ -40,3 +40,7 @@ decisions:
     plan: plans/prezzos.md
     status: in-progress
     priority: P3
+  - title: Doctor workspace
+    plan: plans/doctor-workspace.md
+    status: in-progress
+    priority: P2
