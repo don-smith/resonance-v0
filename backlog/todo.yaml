@@ -1,13 +1,5 @@
 version: 1
 decisions:
-  - title: Backlog Agent and Skill
-    plan: plans/backlog-agent-skill.md
-    status: recently-done
-    priority: P2
-  - title: Member packages
-    plan: plans/member-packages.md
-    status: recently-done
-    priority: P2
   - title: Telemetry
     plan: plans/telemetry.md
     status: recently-done
@@ -16,10 +8,6 @@ decisions:
     plan: plans/git-package.md
     status: in-planning
     priority: P3
-  - title: Architecture package
-    plan: plans/architecture-package.md
-    status: recently-done
-    priority: P2
   - title: Team chat package
     plan: plans/team-chat-package.md
     status: in-planning
@@ -49,6 +37,6 @@ decisions:
     status: recently-done
     priority: P1
   - title: Prezzos
+    plan: plans/prezzos.md
     status: is-ready
     priority: P3
-    plan: plans/prezzos.md
