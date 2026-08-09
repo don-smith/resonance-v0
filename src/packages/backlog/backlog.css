@@ -22,8 +22,8 @@
 .backlog-plan header { position: relative; display: flex; align-items: center; gap: 14px; padding: 28px 52px 20px; border-bottom: 1px solid var(--line); color: var(--muted); font: 11px var(--mono); }
 .backlog-plan header span:first-child { color: var(--accent); }
 .backlog-delete-plan, .backlog-agent-toggle { position: absolute; top: 50%; width: 28px; height: 28px; padding: 5px; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; line-height: 1; transform: translateY(-50%); }
-.backlog-delete-plan { right: 92px; }
-.backlog-agent-toggle { right: 52px; }
+.backlog-delete-plan { right: 60px; }
+.backlog-agent-toggle { right: 20px; }
 .backlog-delete-plan:disabled { cursor: default; opacity: .45; }
 .backlog-delete-plan:hover:not(:disabled), .backlog-delete-plan:focus-visible { border-color: transparent; color: var(--danger); }
 .backlog-delete-plan svg, .backlog-agent-toggle svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -65,8 +65,8 @@
   .backlog-workspace { grid-template-columns: minmax(190px, 230px) minmax(0, 1fr) minmax(250px, 300px); }
   .backlog-workspace.backlog-agent-hidden { grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); }
   .backlog-plan header, .backlog-content { padding-left: 32px; padding-right: 32px; }
-  .backlog-delete-plan { right: 72px; }
-  .backlog-agent-toggle { right: 32px; }
+  .backlog-delete-plan { right: 60px; }
+  .backlog-agent-toggle { right: 20px; }
 }
 @media (max-width: 820px) {
   .backlog-workspace { grid-template-columns: minmax(190px, 230px) minmax(0, 1fr); overflow: auto; }
