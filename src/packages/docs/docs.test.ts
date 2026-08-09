@@ -8,6 +8,8 @@ import { createHost } from '../../host.ts';
 import { createApp } from '../../server.ts';
 import shellPackage from '../shell/index.ts';
 import { createDocsPackage, docsInput } from './index.ts';
+import { parseHTML } from 'linkedom';
+import createBrowser from './docs.js';
 import { writeDocsDocument, type DocsAgentRuntimeFactory } from './docs-agent.ts';
 
 const appRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -32,6 +34,43 @@ test('validates Docs defaults and agent-specific inputs', () => {
 test('keeps the Docs agent toggle in the same right-side position at every breakpoint', async () => {
   const css = await readFile(new URL('./docs.css', import.meta.url), 'utf8');
   assert.deepEqual([...css.matchAll(/\.docs-agent-toggle \{[^}]*right: (\d+)px;/gs)].map((match) => match[1]), ['20', '20', '20']);
+  assert.match(css, /\.tree-file:hover, \.tree-file\.active \{[^}]*background: var\(--accent-soft\);[^}]*color: var\(--ink\);/s);
+  assert.match(css, /\.tree-file:hover \{[^}]*width: calc\(100% - 6px\);[^}]*margin-right: 6px;/s);
+  assert.match(css, /\.tree-file\.active \{[^}]*width: calc\(100% - 6px\);[^}]*margin-right: 6px;[^}]*border-left-color: var\(--accent\);/s);
+  assert.doesNotMatch(css, /\.tree-file:hover, \.tree-file\.active \{[^}]*border-left-color/s);
+});
+
+test('restores Docs navigation, selected document, and agent visibility from package-local storage', async () => {
+  const { window, document } = parseHTML('<!doctype html><body></body>');
+  globalThis.window = window;
+  globalThis.document = document;
+  const values = new Map<string, string>();
+  window.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)), removeItem: (key) => values.delete(key) } as any;
+  const tree = { rootName: 'repository', documents: ['README.md', 'docs/guide.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }, { type: 'folder', name: 'docs', children: [{ type: 'file', name: 'guide.md', path: 'docs/guide.md' }] }] };
+  const fetchFn = async (url: string) => {
+    if (url === '/api/docs/tree') return { ok: true, async json() { return tree; } };
+    if (url === '/api/docs/agent/state') return { ok: true, async json() { return { messages: [], status: 'idle', error: null }; } };
+    const path = new URL(url, 'https://resonance.local').searchParams.get('path') || 'README.md';
+    return { ok: true, async json() { return { path, html: `<h1>${path}</h1>` }; } };
+  };
+  try {
+    const mount = document.createElement('section'); document.body.append(mount);
+    const first = createBrowser({ fetchFn, eventSourceFactory: () => null }); first.mount(mount); await first.activate();
+    const folder = mount.querySelector('.tree-folder') as HTMLDetailsElement; folder.removeAttribute('open'); folder.dispatchEvent(new window.Event('toggle'));
+    (mount.querySelector('[data-path="docs/guide.md"]') as HTMLButtonElement).click();
+    mount.querySelector('.docs-agent-toggle')?.dispatchEvent(new window.Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(values.get('resonance:docs:collapsed-folders:repository'), '["docs"]');
+    assert.equal(values.get('resonance:docs:selected-path'), 'docs/guide.md');
+    assert.equal(values.get('resonance:docs:agent-visible'), 'false');
+    first.deactivate();
+    const restoredMount = document.createElement('section'); document.body.append(restoredMount);
+    const second = createBrowser({ fetchFn, eventSourceFactory: () => null }); second.mount(restoredMount); await second.activate();
+    assert.equal((restoredMount.querySelector('[data-path="docs/guide.md"]') as HTMLElement).classList.contains('active'), true);
+    assert.equal((restoredMount.querySelector('.tree-folder') as HTMLElement).hasAttribute('open'), false);
+    assert.equal((restoredMount.querySelector('.docs-agent') as HTMLElement).hidden, true);
+    second.deactivate();
+  } finally { delete (globalThis as any).window; delete (globalThis as any).document; }
 });
 
 test('passes the active document and highlighted text to the agent and refreshes after an edit', async () => {

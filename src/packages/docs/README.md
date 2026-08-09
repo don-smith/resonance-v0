@@ -8,7 +8,7 @@ The Docs package provides the repository Markdown workspace. It discovers config
 - Build the sorted folder/file tree shown in the Docs mount.
 - Read and render selected Markdown documents.
 - Navigate relative links between discovered Markdown documents without leaving the Docs workspace.
-- Remember collapsed document-tree folders in browser local storage.
+- Remember the Docs agent panel visibility, selected document, and collapsed document-tree folders in the Docs package's browser local storage area.
 - Enforce the Markdown extension policy after host repository containment.
 - Serve `/api/docs/tree` and `/api/docs/document`.
 - Provide the Docs agent state, SSE events, prompt, credential, stop, and reset routes.

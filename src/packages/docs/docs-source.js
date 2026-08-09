@@ -5,6 +5,8 @@ function escapeHtml(value) {
 }
 
 const COLLAPSED_FOLDERS_STORAGE_PREFIX = 'resonance:docs:collapsed-folders:';
+const AGENT_VISIBLE_STORAGE_KEY = 'resonance:docs:agent-visible';
+const SELECTED_PATH_STORAGE_KEY = 'resonance:docs:selected-path';
 
 function resolveDocumentLink(href, currentPath, documents) {
   if (!href || !currentPath || href.startsWith('/') || href.startsWith('#')) return null;
@@ -21,6 +23,10 @@ function readCollapsedFolders(storage, key) {
   try { const value = JSON.parse(storage.getItem(key) || '[]'); return new Set(Array.isArray(value) ? value.filter((folder) => typeof folder === 'string') : []); } catch { return new Set(); }
 }
 function writeCollapsedFolders(storage, key, folders) { if (!storage || !key) return; try { storage.setItem(key, JSON.stringify([...folders].sort())); } catch { /* Browser storage may be unavailable or full. */ } }
+function readBoolean(storage, key, fallback) { if (!storage) return fallback; try { const value = storage.getItem(key); return value === null ? fallback : value === 'true'; } catch { return fallback; } }
+function writeBoolean(storage, key, value) { if (!storage) return; try { storage.setItem(key, String(value)); } catch { /* Browser storage may be unavailable or full. */ } }
+function readString(storage, key) { if (!storage) return null; try { const value = storage.getItem(key); return typeof value === 'string' && value ? value : null; } catch { return null; } }
+function writeString(storage, key, value) { if (!storage) return; try { if (value) storage.setItem(key, value); else storage.removeItem(key); } catch { /* Browser storage may be unavailable or full. */ } }
 function renderTree(nodes, parentPath = '', collapsedFolders = new Set()) {
   return nodes.map((node) => {
     if (node.type === 'folder') {
@@ -54,6 +60,7 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
   let collapsedFolders = new Set();
   let collapsedFoldersStorage;
   let collapsedFoldersStorageKey;
+  let agentVisible = true;
 
   agentUi = createAgentPanel({
     prefix: 'docs',
@@ -74,6 +81,8 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     element.querySelector('.docs-error').textContent = error?.message || String(error);
   }
   function setAgentVisible(show) {
+    agentVisible = show;
+    writeBoolean(collapsedFoldersStorage, AGENT_VISIBLE_STORAGE_KEY, show);
     agentUi.setVisible(show);
     workspace.classList.toggle('docs-agent-hidden', !show);
     agentToggle.setAttribute('aria-expanded', String(show));
@@ -131,6 +140,7 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     const documentData = await response.json();
     if (selectedPath !== documentData.path) highlightedText = '';
     selectedPath = documentData.path;
+    writeString(collapsedFoldersStorage, SELECTED_PATH_STORAGE_KEY, selectedPath);
     pathElement.textContent = documentData.path;
     root.querySelectorAll('.tree-file').forEach((button) => button.classList.toggle('active', button.dataset.path === documentData.path));
     contentElement.innerHTML = documentData.html;
@@ -158,7 +168,7 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     const remembered = selectedPath && repository.documents.includes(selectedPath) ? selectedPath : null;
     const first = remembered || repository.documents.find((path) => /^readme\.md$/i.test(path)) || repository.documents[0];
     if (first) await showDocument(first);
-    else { selectedPath = null; pathElement.textContent = 'docs'; contentElement.innerHTML = '<p class="docs-loading">This repository has no Markdown documents yet.</p>'; renderAgent(); }
+    else { selectedPath = null; writeString(collapsedFoldersStorage, SELECTED_PATH_STORAGE_KEY, null); pathElement.textContent = 'docs'; contentElement.innerHTML = '<p class="docs-loading">This repository has no Markdown documents yet.</p>'; renderAgent(); }
   }
   async function json(url, options) { const response = await fetchFn(url, options); if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Docs agent request failed.'); return response.json(); }
   async function submitPrompt(prompt = agentUi.prompt) {
@@ -195,7 +205,13 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
       });
     },
     async activate() {
-      active = true; root.hidden = false; connectEvents();
+      active = true;
+      collapsedFoldersStorage = getStorage();
+      agentVisible = readBoolean(collapsedFoldersStorage, AGENT_VISIBLE_STORAGE_KEY, true);
+      selectedPath = readString(collapsedFoldersStorage, SELECTED_PATH_STORAGE_KEY);
+      setAgentVisible(agentVisible);
+      root.hidden = false;
+      connectEvents();
       try { const state = await json('/api/docs/agent/state'); applySnapshot(state, true); await loadTree(); }
       catch (error) { showError(treeElement, error); showError(contentElement, error); throw error; }
     },

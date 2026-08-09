@@ -67,6 +67,52 @@ function formatDate(value) {
     return value || "Unknown time";
   }
 }
+const AGENT_VISIBLE_STORAGE_KEY = "resonance:doctor:agent-visible";
+const SELECTED_CHECK_STORAGE_KEY = "resonance:doctor:selected-check";
+
+function getStorage() {
+  try {
+    return typeof window !== "undefined" ? window.localStorage || null : null;
+  } catch {
+    return null;
+  }
+}
+function readBoolean(storage, key, fallback) {
+  if (!storage) return fallback;
+  try {
+    const value = storage.getItem(key);
+    return value === null ? fallback : value === "true";
+  } catch {
+    return fallback;
+  }
+}
+function writeBoolean(storage, key, value) {
+  if (!storage) return;
+  try {
+    storage.setItem(key, String(value));
+  } catch {
+    /* Browser storage may be unavailable or full. */
+  }
+}
+function readString(storage, key) {
+  if (!storage) return null;
+  try {
+    const value = storage.getItem(key);
+    return typeof value === "string" && value ? value : null;
+  } catch {
+    return null;
+  }
+}
+function writeString(storage, key, value) {
+  if (!storage) return;
+  try {
+    if (value) storage.setItem(key, value);
+    else storage.removeItem(key);
+  } catch {
+    /* Browser storage may be unavailable or full. */
+  }
+}
+
 function appendText(documentRoot, tag, text, className) {
   const element = documentRoot.createElement(tag);
   if (className) element.className = className;
@@ -84,6 +130,7 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
   let agentToggle;
   let agentUi;
   let agentVisible = true;
+  let storage;
   let selectedCheck = defaultChecks[0];
   let checks = defaultChecks.map((check) => ({
     ...check,
@@ -109,6 +156,7 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
   }
   function setAgentVisible(show) {
     agentVisible = show;
+    writeBoolean(storage, AGENT_VISIBLE_STORAGE_KEY, show);
     agentUi.setVisible(show);
     workspace.classList.toggle("doctor-agent-hidden", !show);
     agentToggle.setAttribute("aria-expanded", String(show));
@@ -136,6 +184,7 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
       );
       button.addEventListener("click", () => {
         selectedCheck = check;
+        writeString(storage, SELECTED_CHECK_STORAGE_KEY, selectedCheck.id);
         renderNavigation();
         renderResults();
       });
@@ -348,6 +397,10 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
   }
   async function activate() {
     active = true;
+    storage = getStorage();
+    agentVisible = readBoolean(storage, AGENT_VISIBLE_STORAGE_KEY, true);
+    const rememberedCheck = readString(storage, SELECTED_CHECK_STORAGE_KEY);
+    setAgentVisible(agentVisible);
     root.hidden = false;
     try {
       const value = await requestJson("/api/doctor");
@@ -362,7 +415,10 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
               lastStatus: null,
             }));
       selectedCheck =
-        checks.find((check) => check.id === selectedCheck.id) || checks[0];
+        checks.find((check) => check.id === rememberedCheck) ||
+        checks.find((check) => check.id === selectedCheck.id) ||
+        checks[0];
+      writeString(storage, SELECTED_CHECK_STORAGE_KEY, selectedCheck.id);
       const resultValue = await requestJson("/api/doctor/results").catch(
         () => ({ results: {} }),
       );

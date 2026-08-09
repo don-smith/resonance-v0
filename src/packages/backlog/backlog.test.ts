@@ -192,6 +192,41 @@ test('renders ordered Decisions and selects the first non-done plan', async () =
   assert.equal(root.hidden, true);
 });
 
+test('restores Backlog groups, selected plan, and agent visibility from package-local storage', async () => {
+  const { window, document } = parseHTML('<!doctype html><body></body>');
+  globalThis.window = window;
+  globalThis.document = document;
+  const values = new Map<string, string>();
+  window.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)), removeItem: (key) => values.delete(key) } as any;
+  const items = [
+    { title: 'Queue', path: 'backlog/plans/queue.md', status: 'in-planning', priority: 'P2' },
+    { title: 'Ship', path: 'backlog/plans/ship.md', status: 'is-ready', priority: 'P1' },
+  ];
+  const fetchFn = async (url: string) => {
+    if (url === '/api/backlog/items') return { ok: true, async json() { return { items }; } };
+    const item = items.find((candidate) => url.includes(encodeURIComponent(candidate.path))) || items[0];
+    return { ok: true, async json() { return { ...item, html: `<h1>${item.title}</h1>` }; } };
+  };
+  try {
+    const mount = document.createElement('section'); document.body.append(mount);
+    const first = createBacklog({ fetchFn, eventSourceFactory: () => null }); first.mount(mount); await first.activate();
+    (mount.querySelector('[data-backlog-group="in-planning"] .backlog-group-toggle') as HTMLButtonElement).click();
+    (mount.querySelector('[data-path="backlog/plans/ship.md"]') as HTMLButtonElement).click();
+    mount.querySelector('.backlog-agent-toggle')?.dispatchEvent(new window.Event('click', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(values.get('resonance:backlog:collapsed-groups'), '["in-planning"]');
+    assert.equal(values.get('resonance:backlog:selected-path'), 'backlog/plans/ship.md');
+    assert.equal(values.get('resonance:backlog:agent-visible'), 'false');
+    first.deactivate();
+    const restoredMount = document.createElement('section'); document.body.append(restoredMount);
+    const second = createBacklog({ fetchFn, eventSourceFactory: () => null }); second.mount(restoredMount); await second.activate();
+    assert.equal((restoredMount.querySelector('[data-path="backlog/plans/ship.md"]') as HTMLElement).classList.contains('active'), true);
+    assert.equal((restoredMount.querySelector('[data-backlog-group="in-planning"] .backlog-group-items') as HTMLElement).hidden, true);
+    assert.equal((restoredMount.querySelector('.backlog-agent') as HTMLElement).hidden, true);
+    second.deactivate();
+  } finally { delete (globalThis as any).window; delete (globalThis as any).document; }
+});
+
 test('renders editable priority and status controls and refreshes the decision list', async () => {
   const { document } = parseHTML('<!doctype html><body></body>');
   const root = document.createElement('section');

@@ -8,6 +8,7 @@
 - Run checks against `HostContext.repositoryRoot`, never the Resonance application root by accident.
 - Parse bounded JUnit and Bun dependency output into grouped results with status, timing, output, and failure details.
 - Persist only the latest bounded result and selected check configuration in package state.
+- Remember the Doctor agent-panel visibility and selected check in Doctor's browser local-storage namespace.
 - Present navigation for Unit tests, Type checking, Lint / format, Integration tests, and Dependency security.
 - Provide a shared, toggleable agent panel without allowing the agent to own test execution.
 - Render only inside Shell's supplied private mount and serve its registered browser entrypoint and stylesheet.

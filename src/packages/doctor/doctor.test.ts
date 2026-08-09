@@ -342,6 +342,50 @@ test("renders the persisted result with grouped statuses and timing", async () =
   instance.deactivate();
 });
 
+test("restores Doctor's selected check and agent visibility from package-local storage", async () => {
+  const { window, document } = parseHTML("<!doctype html><body></body>");
+  globalThis.window = window;
+  globalThis.document = document;
+  const values = new Map();
+  window.localStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  const fetchFn = async (url) => ({
+    ok: true,
+    async json() {
+      return url === "/api/doctor" ? { label: "Doctor" } : { results: {} };
+    },
+  });
+  try {
+    const mount = document.createElement("section");
+    document.body.append(mount);
+    const first = createPackage({ fetchFn });
+    first.mount(mount);
+    await first.activate();
+    mount.querySelector('[data-check-id="type-check"]').click();
+    mount.querySelector(".doctor-agent-toggle").click();
+    assert.equal(values.get("resonance:doctor:selected-check"), "type-check");
+    assert.equal(values.get("resonance:doctor:agent-visible"), "false");
+    first.deactivate();
+    const restoredMount = document.createElement("section");
+    document.body.append(restoredMount);
+    const second = createPackage({ fetchFn });
+    second.mount(restoredMount);
+    await second.activate();
+    assert.equal(
+      restoredMount.querySelector(".doctor-nav-test.active").dataset.checkId,
+      "type-check",
+    );
+    assert.equal(restoredMount.querySelector(".doctor-agent").hidden, true);
+    second.deactivate();
+  } finally {
+    delete globalThis.window;
+    delete globalThis.document;
+  }
+});
+
 test("renders check navigation, a default unit-test view, and a toggleable agent panel", async () => {
   const { document } = parseHTML("<!doctype html><body></body>");
   const mount = document.createElement("section");

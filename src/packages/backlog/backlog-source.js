@@ -7,6 +7,17 @@ function escapeHtml(value) {
 
 const statuses = ['recently-done', 'in-progress', 'is-ready', 'in-planning'];
 const priorities = ['P0', 'P1', 'P2', 'P3'];
+const AGENT_VISIBLE_STORAGE_KEY = 'resonance:backlog:agent-visible';
+const COLLAPSED_GROUPS_STORAGE_KEY = 'resonance:backlog:collapsed-groups';
+const SELECTED_PATH_STORAGE_KEY = 'resonance:backlog:selected-path';
+
+function getStorage() { try { return typeof window !== 'undefined' ? window.localStorage || null : null; } catch { return null; } }
+function readJson(storage, key, fallback) { if (!storage) return fallback; try { const value = JSON.parse(storage.getItem(key) || 'null'); return value === null ? fallback : value; } catch { return fallback; } }
+function writeJson(storage, key, value) { if (!storage) return; try { storage.setItem(key, JSON.stringify(value)); } catch { /* Browser storage may be unavailable or full. */ } }
+function readBoolean(storage, key, fallback) { if (!storage) return fallback; try { const value = storage.getItem(key); return value === null ? fallback : value === 'true'; } catch { return fallback; } }
+function writeBoolean(storage, key, value) { if (!storage) return; try { storage.setItem(key, String(value)); } catch { /* Browser storage may be unavailable or full. */ } }
+function readString(storage, key) { if (!storage) return null; try { const value = storage.getItem(key); return typeof value === 'string' && value ? value : null; } catch { return null; } }
+function writeString(storage, key, value) { if (!storage) return; try { if (value) storage.setItem(key, value); else storage.removeItem(key); } catch { /* Browser storage may be unavailable or full. */ } }
 
 export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (url) => typeof EventSource === 'function' ? new EventSource(url) : null, confirmFn = (message) => typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm(message) : false } = {}) {
   let root;
@@ -43,6 +54,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
   let retryVisible = false;
   let agentVisible = true;
   const collapsedGroups = new Set();
+  let storage;
   let chatState = { messages: [], status: 'idle', error: null, pendingDeletion: null };
   agentUi = createAgentPanel({
     prefix: 'backlog',
@@ -58,6 +70,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
 
   function setAgentVisible(show) {
     agentVisible = show;
+    writeBoolean(storage, AGENT_VISIBLE_STORAGE_KEY, show);
     agentUi.setVisible(show);
     workspace.classList.toggle('backlog-agent-hidden', !show);
     agentToggle.setAttribute('aria-expanded', String(show));
@@ -82,7 +95,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
         const priority = list.ownerDocument.createElement('span'); priority.className = 'backlog-priority'; priority.textContent = item.priority;
         button.append(priority, list.ownerDocument.createTextNode(item.title)); section.items.append(button);
       }
-      section.toggle.addEventListener('click', () => { if (section.collapsed) collapsedGroups.add(status); else collapsedGroups.delete(status); renderItems(); });
+      section.toggle.addEventListener('click', () => { if (section.collapsed) collapsedGroups.add(status); else collapsedGroups.delete(status); writeJson(storage, COLLAPSED_GROUPS_STORAGE_KEY, [...collapsedGroups].sort()); renderItems(); });
       list.append(section.element);
     }
     if (!list.children.length) list.innerHTML = '<p class="backlog-empty">No decisions found.</p>';
@@ -185,6 +198,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     const plan = await response.json();
     if (!active || request !== planRequest) return;
     selectedPath = plan.path;
+    writeString(storage, SELECTED_PATH_STORAGE_KEY, selectedPath);
     deleteButton.disabled = false;
     pathLabel.textContent = plan.path;
     renderItems();
@@ -202,7 +216,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     renderItems();
     const selected = items.find((item) => item.path === selectedPath) || items.find((item) => item.status !== 'recently-done') || items[0];
     if (selected) await showPlan(selected.path);
-    else { selectedPath = null; deleteButton.disabled = true; pathLabel.textContent = 'backlog'; content.innerHTML = '<p class="backlog-empty">No linked plans are available.</p>'; renderTranscript(); }
+    else { selectedPath = null; writeString(storage, SELECTED_PATH_STORAGE_KEY, null); deleteButton.disabled = true; pathLabel.textContent = 'backlog'; content.innerHTML = '<p class="backlog-empty">No linked plans are available.</p>'; renderTranscript(); }
   }
   function queueRefresh(revision) {
     refreshRequested = Math.max(refreshRequested, Number(revision) || refreshRequested + 1);
@@ -279,7 +293,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
       agentToggle.addEventListener('click', () => setAgentVisible(!agentVisible));
       renderItems(); renderTranscript();
     },
-    async activate() { active = true; root.hidden = false; connectEvents(); try { await loadItems(); } catch (error) { showError(error); throw error; } },
+    async activate() { active = true; storage = getStorage(); agentVisible = readBoolean(storage, AGENT_VISIBLE_STORAGE_KEY, true); selectedPath = readString(storage, SELECTED_PATH_STORAGE_KEY); collapsedGroups.clear(); for (const group of readJson(storage, COLLAPSED_GROUPS_STORAGE_KEY, [])) if (typeof group === 'string') collapsedGroups.add(group); setAgentVisible(agentVisible); root.hidden = false; connectEvents(); try { await loadItems(); } catch (error) { showError(error); throw error; } },
     deactivate() { active = false; planRequest += 1; closeEvents(); root.hidden = true; },
   };
 }
