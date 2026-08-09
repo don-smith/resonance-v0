@@ -18,7 +18,7 @@ decisions:
     priority: P3
   - title: Telemetry agent
     plan: plans/telemetry-agent.md
-    status: is-ready
+    status: in-planning
     priority: P2
   - title: Express architecture
     plan: plans/express-architecture.md
@@ -42,5 +42,9 @@ decisions:
     priority: P3
   - title: Doctor workspace
     plan: plans/doctor-workspace.md
-    status: in-progress
+    status: recently-done
     priority: P2
+  - title: Improve Telemetry
+    plan: plans/improve-telemetry.md
+    status: is-ready
+    priority: P1
