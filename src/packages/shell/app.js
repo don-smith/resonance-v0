@@ -89,7 +89,7 @@ function renderRepositoryMetadata(documentRoot, manifest) {
   if (runtimeVersion && runtime.version) runtimeVersion.textContent = runtime.version;
 }
 
-export async function startApplication({ documentRoot = document, windowRoot = globalThis.window, fetchFn = fetch, eventSourceFactory = (url) => new EventSource(url) } = {}) {
+export async function startApplication({ documentRoot = document, windowRoot = globalThis.window, fetchFn = fetch, eventSourceFactory = (url) => typeof windowRoot?.EventSource === 'function' ? new windowRoot.EventSource(url) : null } = {}) {
   const theme = createThemeController({ documentRoot, windowRoot });
   const response = await fetchFn('/api/manifest');
   if (!response.ok) throw new Error('Package manifest could not be loaded.');

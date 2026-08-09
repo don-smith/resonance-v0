@@ -28,6 +28,7 @@ test('loads browser modules and opens Home from the repository title', async () 
     calls.push(url);
     if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20, scope: 'member' }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'home', entry: '/assets/home/home.js', stylesheet: '/assets/home/home.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] });
     if (url === '/api/home') return response({ html: '<h1>Fixture Home</h1>' });
+    if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null });
     if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: ['README.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }] });
     if (url === '/api/docs/document?path=README.md') return response({ path: 'README.md', html: '<h1>README</h1>' });
     throw new Error(`Unexpected request: ${url}`);
@@ -57,7 +58,7 @@ test('loads browser modules and opens Home from the repository title', async () 
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(home.getAttribute('aria-current'), 'page');
     assert.equal(document.querySelector('.package-home').hidden, false);
-    assert.deepEqual(calls, ['/api/manifest', '/api/home', '/api/docs/tree', '/api/docs/document?path=README.md', '/api/home']);
+    assert.deepEqual(calls, ['/api/manifest', '/api/home', '/api/docs/agent/state', '/api/docs/tree', '/api/docs/document?path=README.md', '/api/home']);
   } finally { cleanup(); }
 });
 
@@ -126,6 +127,7 @@ test('navigates relative Markdown links inside the Docs workspace', async () => 
   const fetchFn = async (url) => {
     calls.push(url);
     if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] });
+    if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null });
     if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: ['README.md', 'docs/guide.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }, { type: 'folder', name: 'docs', children: [{ type: 'file', name: 'guide.md', path: 'docs/guide.md' }] }] });
     if (url === '/api/docs/document?path=README.md') return response({ path: 'README.md', html: '<h1>README</h1><p><a href="docs/guide.md">Read the guide</a></p>' });
     if (url === '/api/docs/document?path=docs%2Fguide.md') return response({ path: 'docs/guide.md', html: '<h1>Guide</h1><p><a href="../README.md">Back to README</a></p>' });
@@ -157,6 +159,7 @@ test('remembers collapsed Docs folders in browser storage', async () => {
   window.localStorage = { getItem: (key) => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)) };
   const fetchFn = async (url) => {
     if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] });
+    if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null });
     if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: ['README.md', 'docs/guide.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }, { type: 'folder', name: 'docs', children: [{ type: 'file', name: 'guide.md', path: 'docs/guide.md' }] }] });
     if (url === '/api/docs/document?path=README.md') return response({ path: 'README.md', html: '<h1>README</h1>' });
     throw new Error(`Unexpected request: ${url}`);
@@ -179,6 +182,7 @@ test('leaves external, fragment, and unsupported Markdown links to the browser',
   const { window, document } = parseHTML('<!doctype html><head></head><body><nav id="primary-navigation"></nav><main id="package-mount"></main></body>');
   const fetchFn = async (url) => {
     if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] });
+    if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null });
     if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: ['README.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }] });
     if (url === '/api/docs/document?path=README.md') return response({ path: 'README.md', html: '<p><a href="https://example.com">External</a><a href="README.md#section">Fragment</a><a href="image.png">Asset</a></p>' });
     throw new Error(`Unexpected request: ${url}`);
@@ -198,6 +202,43 @@ test('leaves external, fragment, and unsupported Markdown links to the browser',
 test('keeps a failed package activation local to that package', async () => {
   const { window, document } = parseHTML('<!doctype html><head></head><body><nav id="primary-navigation"></nav><main id="package-mount"></main></body>');
   let homeCalls = 0;
-  const fetchFn = async (url) => { if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'home', entry: '/assets/home/home.js', stylesheet: '/assets/home/home.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] }); if (url === '/api/home') return homeCalls++ === 0 ? response({ html: '<h1>Home</h1>' }) : response({ error: 'missing' }, 404); if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: [], tree: [] }); throw new Error(`Unexpected request: ${url}`); };
+  const fetchFn = async (url) => { if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'home', entry: '/assets/home/home.js', stylesheet: '/assets/home/home.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] }); if (url === '/api/home') return homeCalls++ === 0 ? response({ html: '<h1>Home</h1>' }) : response({ error: 'missing' }, 404); if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null }); if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: [], tree: [] }); throw new Error(`Unexpected request: ${url}`); };
   try { const coordinator = await loadCoordinator(window, document); const application = await coordinator.startApplication({ documentRoot: document, fetchFn }); await assert.rejects(() => application.activate('home'), /Home source could not be loaded/); await application.activate('docs'); assert.match(document.querySelector('.package-docs .document-content').textContent, /no Markdown documents/); } finally { cleanup(); }
+});
+
+test('shows the Docs agent, sends the active document and highlighted text, and refreshes edits', async () => {
+  const { window, document } = parseHTML('<!doctype html><head></head><body><nav id="primary-navigation"></nav><main id="package-mount"></main></body>');
+  let stream;
+  const requests = [];
+  let documentVersion = 0;
+  const fetchFn = async (url, options) => {
+    requests.push({ url, options });
+    if (url === '/api/manifest') return response({ version: 1, navigation: [{ id: 'docs', label: 'Docs', order: 20 }], packages: [{ id: 'shell', entry: '/assets/app.js', stylesheet: '/assets/shell/shell.css' }, { id: 'docs', entry: '/assets/docs/docs.js', stylesheet: '/assets/docs/docs.css' }] });
+    if (url === '/api/docs/agent/state') return response({ messages: [], status: 'idle', hasSession: false, error: null });
+    if (url === '/api/docs/tree') return response({ rootName: 'fixture', documents: ['README.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }] });
+    if (url === '/api/docs/document?path=README.md') return response({ path: 'README.md', html: documentVersion ? '<h1>Updated</h1><p>New copy.</p>' : '<h1>README</h1><p>Highlighted copy.</p>' });
+    if (url === '/api/docs/agent/prompt') return response({ accepted: true });
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const eventSourceFactory = (url) => { stream = { url, close() {} }; return stream; };
+  try {
+    const coordinator = await loadCoordinator(window, document);
+    const application = await coordinator.startApplication({ documentRoot: document, windowRoot: window, fetchFn, eventSourceFactory });
+    await application.activate('docs');
+    const content = document.querySelector('.package-docs .document-content');
+    const selectedNode = content.querySelector('p');
+    document.getSelection = () => ({ rangeCount: 1, toString: () => 'Highlighted copy.', getRangeAt: () => ({ commonAncestorContainer: selectedNode }) });
+    document.dispatchEvent(new window.Event('selectionchange'));
+    assert.match(document.querySelector('.package-docs .docs-selection-context').textContent, /Highlighted text included/);
+    const toggle = document.querySelector('.package-docs .docs-agent-toggle'); toggle.click();
+    assert.equal(document.querySelector('.package-docs .docs-agent').hidden, true); toggle.click();
+    const input = document.querySelector('.package-docs .docs-composer textarea'); input.value = 'Reword this'; input.dispatchEvent(new window.Event('input'));
+    document.querySelector('.package-docs .docs-composer').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const prompt = requests.find((request) => request.url === '/api/docs/agent/prompt');
+    assert.deepEqual(JSON.parse(prompt.options.body), { prompt: 'Reword this', selectedPath: 'README.md', selectedText: 'Highlighted copy.' });
+    documentVersion = 1; stream.onmessage({ data: JSON.stringify({ type: 'mutation-committed', affectedPaths: ['README.md'] }) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.match(document.querySelector('.package-docs .document-content').textContent, /New copy/);
+  } finally { cleanup(); }
 });

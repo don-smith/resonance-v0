@@ -22,7 +22,9 @@
         ".git",
         "node_modules",
         ".myflow"
-      ]
+      ],
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-flash"
     },
     "backlog": {
       "module": "src/packages/backlog/index.ts",

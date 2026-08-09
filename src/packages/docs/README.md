@@ -1,6 +1,6 @@
 # Docs package
 
-The Docs package provides the repository Markdown workspace. It discovers configured document types, projects them into a tree, reads selected files, renders Markdown, and exposes canonical namespaced routes.
+The Docs package provides the repository Markdown workspace. It discovers configured document types, projects them into a tree, reads selected files, renders Markdown, and exposes canonical namespaced routes. Its optional local agent receives the active document and highlighted text, and can make bounded Markdown edits.
 
 ## Responsibilities
 
@@ -11,6 +11,7 @@ The Docs package provides the repository Markdown workspace. It discovers config
 - Remember collapsed document-tree folders in browser local storage.
 - Enforce the Markdown extension policy after host repository containment.
 - Serve `/api/docs/tree` and `/api/docs/document`.
+- Provide the Docs agent state, SSE events, prompt, credential, stop, and reset routes.
 - Serve the Docs browser entrypoint and stylesheet.
 
 ## Configuration
@@ -24,7 +25,9 @@ Configure Docs as an entry in the repository manifest’s `packages` object:
     "docs": {
       "module": "src/packages/docs/index.ts",
       "extensions": [".md", ".markdown"],
-      "ignoredDirectories": [".git", "node_modules"]
+      "ignoredDirectories": [".git", "node_modules"],
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-flash"
     }
   }
 }
@@ -34,8 +37,23 @@ Configure Docs as an entry in the repository manifest’s `packages` object:
 - `enabled` is an optional common package flag; `false` omits Docs from the host.
 - `extensions` is optional and defaults to `[".md", ".markdown"]`. Every value must be a dotted string.
 - `ignoredDirectories` is optional and defaults to `[".git", "node_modules"]`. Every value must be a non-empty directory name.
+- `provider` is optional and defaults to `openrouter`; `openai` and `openrouter` are supported.
+- `model` is optional and defaults to `deepseek/deepseek-v4-flash`.
 
-Docs uses `extensions` when discovering and reading documents, and applies `ignoredDirectories` during discovery and document access. Omit either option to use its default; provide both when the repository uses a different Markdown extension policy or needs additional directories excluded.
+Docs uses `extensions` when discovering and reading documents, and applies `ignoredDirectories` during discovery, document access, and agent edits. Omit either option to use its default; provide both when the repository uses a different Markdown extension policy or needs additional directories excluded.
+
+## Agent
+
+The agent routes are:
+
+- `GET /api/docs/agent/state`
+- `GET /api/docs/agent/events` (snapshot-first SSE)
+- `POST /api/docs/agent/prompt` with `{ prompt, selectedPath, selectedText? }`
+- `POST /api/docs/agent/credential`
+- `POST /api/docs/agent/stop`
+- `POST /api/docs/agent/reset`
+
+The browser captures a text selection within the rendered document and includes it with the active document path on every prompt. The agent can read, replace, or edit configured Markdown files only. Changes emit a mutation event and the Docs view reloads the active document without a page reload. The provider key is stored in gitignored `.resonance/docs-agent.env` with mode `0600`.
 
 ## Ownership boundary
 

@@ -34,7 +34,7 @@ The shared modules must not know package route names, repository data, agent pro
 
 ## Build convention
 
-Architecture and Backlog browser entries are authored as `*-source.js` files and bundled into their registered assets:
+Architecture, Backlog, and Docs browser entries are authored as `*-source.js` files and bundled into their registered assets:
 
 ```sh
 bun run build:browser
@@ -44,4 +44,4 @@ A package may omit the agent panel entirely. Future workspace starters should ge
 
 ## Verification
 
-Shared module behavior is tested at the DOM seam in `src/ui/*.test.ts`. Backlog and Architecture retain their package-level browser tests, which verify that the two adapters preserve their domain-specific behavior while using the shared modules.
+Shared module behavior is tested at the DOM seam in `src/ui/*.test.ts`. Backlog, Architecture, and Docs retain package-level browser tests, which verify that their adapters preserve domain-specific behavior while using the shared modules.
