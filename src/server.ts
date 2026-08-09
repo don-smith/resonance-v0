@@ -77,7 +77,7 @@ export async function startServer({ root = process.cwd(), appRoot = projectRoot,
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const candidatePort = port + attempt; const server = await createApp({ root, appRoot, registry: resolvedRegistry });
     try {
-      await new Promise((resolve, reject) => { server.once('error', reject); server.listen(candidatePort, host, resolve); });
+      await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(candidatePort, host, () => resolve()); });
       resolvedRegistry.context.telemetry.info('Resonance server listening', { host, port: candidatePort });
       return server;
     }

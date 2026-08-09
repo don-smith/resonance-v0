@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { repositoryPresentation, runtimeVersion } from './repository-metadata.ts';
+import { repositoryPresentation, runtimeVersion, type RepositoryPresentation } from './repository-metadata.ts';
 import type { AssetContribution, BrowserContribution, HostContext, HttpMethod, NavigationContribution, PackageDefinition, PackageInput, PackageRegistration, RepositoryConfig, RouteContribution, Telemetry, TelemetryController } from './package-contract.ts';
 import { MANIFEST_VERSION } from './package-contract.ts';
 import { createTelemetry } from './telemetry.ts';

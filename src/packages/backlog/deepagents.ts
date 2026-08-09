@@ -210,8 +210,8 @@ export function createPackagedSkillBackend(skill: string, repositoryRoot?: strin
     readRaw(requestedPath) { return isSkillPath(requestedPath) ? skillBackend.readRaw(requestedPath) : repositoryBackend.readRaw(requestedPath); },
     grep(pattern, requestedPath = '/', glob) { const base = requestedPath || '/'; return isSkillPath(base) ? skillBackend.grep(pattern, base, glob || undefined) : repositoryBackend.grep(pattern, base, glob || undefined); },
     glob(pattern, requestedPath = '/') { return isSkillPath(requestedPath) ? skillBackend.glob(pattern, requestedPath) : repositoryBackend.glob(pattern, requestedPath); },
-    write(requestedPath, content) { return isSkillPath(requestedPath) ? skillBackend.write(requestedPath, content) : repositoryBackend.write(requestedPath, content); },
-    edit(requestedPath, oldString, newString, replaceAll) { return isSkillPath(requestedPath) ? skillBackend.edit(requestedPath, oldString, newString, replaceAll) : repositoryBackend.edit(requestedPath, oldString, newString, replaceAll); },
+    write(requestedPath, content) { return isSkillPath(requestedPath) ? (skillBackend.write as Function)(requestedPath, content) : (repositoryBackend.write as Function)(requestedPath, content); },
+    edit(requestedPath, oldString, newString, replaceAll) { return isSkillPath(requestedPath) ? (skillBackend.edit as Function)(requestedPath, oldString, newString, replaceAll) : (repositoryBackend.edit as Function)(requestedPath, oldString, newString, replaceAll); },
   };
 }
 
