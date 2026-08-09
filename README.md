@@ -8,9 +8,9 @@ Resonance is composed from package folders under `src/packages/<package-id>`:
 
 - **Shell** owns navigation, workspace mounts, the fixed browser bootstrap, shared layout, and repository-title access to Home.
 - **Home** renders the configured repository landing source (`README.md` by default, or repository-owned Markdown/HTML) without adding a workspace navigation item.
-- **Docs** owns Markdown discovery, tree navigation, and document rendering.
+- **Documentation** owns Markdown discovery, tree navigation, and document rendering.
 
-A **package** is Resonance's general extensibility and implementation unit. A **workspace** is a user-visible surface listed in workspace navigation and mounted by Shell. Docs, Architecture, and Backlog provide workspaces; Home is the repository landing page opened from the repository title, and Shell is infrastructure. Member packages are external packages selected per developer. Package terminology remains authoritative for source folders, manifest entries, package IDs, routes, assets, contracts, and the authoring CLI.
+A **package** is Resonance's general extensibility and implementation unit. A **workspace** is a user-visible surface listed in workspace navigation and mounted by Shell. Documentation, Architecture, and Backlog provide workspaces; Home is the repository landing page opened from the repository title, and Shell is infrastructure. Member packages are external packages selected per developer. Package terminology remains authoritative for source folders, manifest entries, package IDs, routes, assets, contracts, and the authoring CLI.
 
 ## Try it
 
@@ -28,7 +28,7 @@ cd /path/to/another/repository
 resonate
 ```
 
-The command reads `.resonance/config.json` from the current repository. If it is absent, Resonance reports that the repository is not installed and asks whether to install it. Approval runs the same setup as `resonate install`: Shell is always installed, while Home and Docs can be selected interactively. Existing config files are authoritative: omitted packages are not imported or registered. Member packages are never added by team installation. Select them from an external member repository with `resonate member install /path/to/member-packages`; the ignored `.resonance/member-config.json` selects them for the current repository. The server starts at port 4317, moves to the next available port if needed, and opens the selected URL.
+The command reads `.resonance/config.json` from the current repository. If it is absent, Resonance reports that the repository is not installed and asks whether to install it. Approval runs the same setup as `resonate install`: Shell is always installed, while Home and Documentation can be selected interactively. Existing config files are authoritative: omitted packages are not imported or registered. Member packages are never added by team installation. Select them from an external member repository with `resonate member install /path/to/member-packages`; the ignored `.resonance/member-config.json` selects them for the current repository. The server starts at port 4317, moves to the next available port if needed, and opens the selected URL.
 
 ## Telemetry
 
@@ -45,8 +45,8 @@ Use `resonate install` to create `.resonance/config.json`. Installation records 
   "packages": {
     "shell": { "module": "src/packages/shell/index.ts" },
     "home": { "module": "src/packages/home/index.ts", "source": "README.md" },
-    "docs": {
-      "module": "src/packages/docs/index.ts",
+    "documentation": {
+      "module": "src/packages/documentation/index.ts",
       "extensions": [".md", ".markdown"],
       "ignoredDirectories": [".git", "node_modules"]
     },
@@ -93,9 +93,9 @@ Add a repository-owned HTML fragment such as `.resonance/home.html`, scope its s
 }
 ```
 
-Home accepts relative `.md`, `.markdown`, `.html`, and `.htm` sources. Markdown is rendered safely; HTML is trusted repository-owned markup inserted unchanged. Package responsibilities are documented in `src/packages/shell/README.md`, `src/packages/home/README.md`, and `src/packages/docs/README.md`.
+Home accepts relative `.md`, `.markdown`, `.html`, and `.htm` sources. Markdown is rendered safely; HTML is trusted repository-owned markup inserted unchanged. Package responsibilities are documented in `src/packages/shell/README.md`, `src/packages/home/README.md`, and `src/packages/documentation/README.md`.
 
-Package routes are canonical under `/api/<package-id>/...`; Docs uses `/api/docs/tree` and `/api/docs/document`. Package assets retain `/assets/<package-id>/...` public URLs while their physical files resolve from the owning team or member repository. Shell presents team navigation before personal member navigation.
+Package routes are canonical under `/api/<package-id>/...`; Documentation uses `/api/documentation/tree` and `/api/documentation/document`. Package assets retain `/assets/<package-id>/...` public URLs while their physical files resolve from the owning team or member repository. Shell presents team navigation before personal member navigation.
 
 ## Develop resonance
 

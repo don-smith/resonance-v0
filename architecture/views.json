@@ -77,9 +77,9 @@
       "description": "The components inside the Home package container."
     },
     {
-      "id": "docsComponents",
-      "name": "Docs components",
-      "description": "The components inside the Docs package container."
+      "id": "documentationComponents",
+      "name": "Documentation components",
+      "description": "The components inside the Documentation package container."
     },
     {
       "id": "architectureComponents",

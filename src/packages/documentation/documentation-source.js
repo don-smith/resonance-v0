@@ -4,9 +4,9 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
 
-const COLLAPSED_FOLDERS_STORAGE_PREFIX = 'resonance:docs:collapsed-folders:';
-const AGENT_VISIBLE_STORAGE_KEY = 'resonance:docs:agent-visible';
-const SELECTED_PATH_STORAGE_KEY = 'resonance:docs:selected-path';
+const COLLAPSED_FOLDERS_STORAGE_PREFIX = 'resonance:documentation:collapsed-folders:';
+const AGENT_VISIBLE_STORAGE_KEY = 'resonance:documentation:agent-visible';
+const SELECTED_PATH_STORAGE_KEY = 'resonance:documentation:selected-path';
 
 function resolveDocumentLink(href, currentPath, documents) {
   if (!href || !currentPath || href.startsWith('/') || href.startsWith('#')) return null;
@@ -38,7 +38,7 @@ function renderTree(nodes, parentPath = '', collapsedFolders = new Set()) {
   }).join('');
 }
 
-export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory = (url) => typeof window !== 'undefined' && typeof window.EventSource === 'function' ? new window.EventSource(url) : null } = {}) {
+export default function createDocumentationPackage({ fetchFn = fetch, eventSourceFactory = (url) => typeof window !== 'undefined' && typeof window.EventSource === 'function' ? new window.EventSource(url) : null } = {}) {
   let root;
   let repository = { documents: [] };
   let selectedPath = null;
@@ -63,9 +63,9 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
   let agentVisible = true;
 
   agentUi = createAgentPanel({
-    prefix: 'docs',
+    prefix: 'documentation',
     label: 'AGENT / CHAT',
-    ariaLabel: 'Docs agent',
+    ariaLabel: 'Documentation agent',
     placeholder: 'Ask about this document…',
     supportsStop: true,
     onSend: (prompt) => submitPrompt(prompt),
@@ -77,14 +77,14 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
   });
 
   function showError(element, error) {
-    element.innerHTML = '<p class="docs-error"></p>';
-    element.querySelector('.docs-error').textContent = error?.message || String(error);
+    element.innerHTML = '<p class="documentation-error"></p>';
+    element.querySelector('.documentation-error').textContent = error?.message || String(error);
   }
   function setAgentVisible(show) {
     agentVisible = show;
     writeBoolean(collapsedFoldersStorage, AGENT_VISIBLE_STORAGE_KEY, show);
     agentUi.setVisible(show);
-    workspace.classList.toggle('docs-agent-hidden', !show);
+    workspace.classList.toggle('documentation-agent-hidden', !show);
     agentToggle.setAttribute('aria-expanded', String(show));
     const label = show ? 'Hide agent panel' : 'Show agent panel';
     agentToggle.setAttribute('aria-label', label); agentToggle.title = label;
@@ -95,7 +95,7 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     auxiliary.replaceChildren();
     if (highlightedText) {
       const notice = auxiliary.ownerDocument.createElement('p');
-      notice.className = 'docs-selection-context';
+      notice.className = 'documentation-selection-context';
       notice.textContent = `Highlighted text included (${highlightedText.length} characters).`;
       auxiliary.append(notice);
     }
@@ -128,14 +128,14 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
   }
   function connectEvents() {
     if (eventSource || !active) return;
-    eventSource = eventSourceFactory('/api/docs/agent/events');
+    eventSource = eventSourceFactory('/api/documentation/agent/events');
     if (!eventSource) return;
     eventSource.onmessage = handleEvent;
     eventSource.onerror = () => { if (active) chatState.error = 'Connection interrupted'; renderAgent(); };
   }
   function closeEvents() { if (eventSource) eventSource.close(); eventSource = null; }
   async function showDocument(documentPath) {
-    const response = await fetchFn(`/api/docs/document?path=${encodeURIComponent(documentPath)}`);
+    const response = await fetchFn(`/api/documentation/document?path=${encodeURIComponent(documentPath)}`);
     if (!response.ok) throw new Error('Document could not be loaded.');
     const documentData = await response.json();
     if (selectedPath !== documentData.path) highlightedText = '';
@@ -147,9 +147,9 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     renderAgent();
   }
   async function loadTree() {
-    treeElement.innerHTML = '<p class="docs-loading">Loading repository…</p>';
-    contentElement.innerHTML = '<p class="docs-loading">Loading repository…</p>';
-    const response = await fetchFn('/api/docs/tree');
+    treeElement.innerHTML = '<p class="documentation-loading">Loading repository…</p>';
+    contentElement.innerHTML = '<p class="documentation-loading">Loading repository…</p>';
+    const response = await fetchFn('/api/documentation/tree');
     if (!response.ok) throw new Error('Repository tree could not be loaded.');
     repository = await response.json();
     countElement.textContent = repository.documents.length;
@@ -168,29 +168,29 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
     const remembered = selectedPath && repository.documents.includes(selectedPath) ? selectedPath : null;
     const first = remembered || repository.documents.find((path) => /^readme\.md$/i.test(path)) || repository.documents[0];
     if (first) await showDocument(first);
-    else { selectedPath = null; writeString(collapsedFoldersStorage, SELECTED_PATH_STORAGE_KEY, null); pathElement.textContent = 'docs'; contentElement.innerHTML = '<p class="docs-loading">This repository has no Markdown documents yet.</p>'; renderAgent(); }
+    else { selectedPath = null; writeString(collapsedFoldersStorage, SELECTED_PATH_STORAGE_KEY, null); pathElement.textContent = 'documentation'; contentElement.innerHTML = '<p class="documentation-loading">This repository has no Markdown documents yet.</p>'; renderAgent(); }
   }
-  async function json(url, options) { const response = await fetchFn(url, options); if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Docs agent request failed.'); return response.json(); }
+  async function json(url, options) { const response = await fetchFn(url, options); if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Documentation agent request failed.'); return response.json(); }
   async function submitPrompt(prompt = agentUi.prompt) {
     const value = prompt.trim();
     if (!value || !selectedPath || chatState.status === 'working') return;
     lastPrompt = value;
-    const response = await fetchFn('/api/docs/agent/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: value, selectedPath, ...(highlightedText ? { selectedText: highlightedText } : {}) }) });
+    const response = await fetchFn('/api/documentation/agent/prompt', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: value, selectedPath, ...(highlightedText ? { selectedText: highlightedText } : {}) }) });
     if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Prompt could not be submitted.');
     const result = await response.json();
     if (result.credentialRequired) showCredential(true); else { agentUi.clearPrompt(); retryVisible = false; }
     renderAgent();
   }
-  async function stop() { if (chatState.status !== 'working' || stopPending) return; stopPending = true; renderAgent(); try { const result = await json('/api/docs/agent/stop', { method: 'POST' }); if (result.state) applySnapshot(result.state, true); } finally { stopPending = false; renderAgent(); } }
-  async function saveCredentialValue(apiKey) { await json('/api/docs/agent/credential', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey }) }); showCredential(false); retryVisible = Boolean(lastPrompt); renderAgent(); }
-  async function reset() { await json('/api/docs/agent/reset', { method: 'POST' }); lastPrompt = null; retryVisible = false; stopPending = false; highlightedText = ''; agentUi.clearPrompt(); showCredential(false); chatState = { messages: [], status: 'idle', error: null }; renderAgent(); }
+  async function stop() { if (chatState.status !== 'working' || stopPending) return; stopPending = true; renderAgent(); try { const result = await json('/api/documentation/agent/stop', { method: 'POST' }); if (result.state) applySnapshot(result.state, true); } finally { stopPending = false; renderAgent(); } }
+  async function saveCredentialValue(apiKey) { await json('/api/documentation/agent/credential', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey }) }); showCredential(false); retryVisible = Boolean(lastPrompt); renderAgent(); }
+  async function reset() { await json('/api/documentation/agent/reset', { method: 'POST' }); lastPrompt = null; retryVisible = false; stopPending = false; highlightedText = ''; agentUi.clearPrompt(); showCredential(false); chatState = { messages: [], status: 'idle', error: null }; renderAgent(); }
 
   return {
     mount(mountRoot) {
       root = mountRoot;
-      root.innerHTML = '<section class="docs-layout" aria-label="Docs"><aside class="document-sidebar"><div class="document-sidebar-head"><p class="eyebrow">WORKSPACE</p><h2>Docs</h2><p class="document-count"><span class="count">—</span> documents</p></div><nav class="document-tree" aria-label="Markdown document tree"><p class="docs-loading">Loading repository…</p></nav></aside><article class="document-pane"><header class="document-header"><span class="section-label">DOCS</span><span class="header-rule" aria-hidden="true"></span><span class="document-path">docs</span><button type="button" class="docs-agent-toggle" aria-controls="docs-agent-panel" aria-expanded="true" aria-label="Hide agent panel" title="Hide agent panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"></path></svg></button></header><div class="document-content" aria-live="polite"><p class="docs-loading">Loading repository…</p></div></article><div class="docs-agent-slot"></div></section>';
-      workspace = root.querySelector('.docs-layout'); treeElement = root.querySelector('.document-tree'); contentElement = root.querySelector('.document-content'); countElement = root.querySelector('.count'); pathElement = root.querySelector('.document-path'); agentToggle = root.querySelector('.docs-agent-toggle');
-      agentUi.mount(root.querySelector('.docs-agent-slot')); agentUi.root.id = 'docs-agent-panel';
+      root.innerHTML = '<section class="documentation-layout" aria-label="Documentation"><aside class="document-sidebar"><div class="document-sidebar-head"><p class="eyebrow">WORKSPACE</p><h2>Documentation</h2><p class="document-count"><span class="count">—</span> documents</p></div><nav class="document-tree" aria-label="Markdown document tree"><p class="documentation-loading">Loading repository…</p></nav></aside><article class="document-pane"><header class="document-header"><span class="section-label">DOCUMENTATION</span><span class="header-rule" aria-hidden="true"></span><span class="document-path">documentation</span><button type="button" class="documentation-agent-toggle" aria-controls="documentation-agent-panel" aria-expanded="true" aria-label="Hide agent panel" title="Hide agent panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z"></path></svg></button></header><div class="document-content" aria-live="polite"><p class="documentation-loading">Loading repository…</p></div></article><div class="documentation-agent-slot"></div></section>';
+      workspace = root.querySelector('.documentation-layout'); treeElement = root.querySelector('.document-tree'); contentElement = root.querySelector('.document-content'); countElement = root.querySelector('.count'); pathElement = root.querySelector('.document-path'); agentToggle = root.querySelector('.documentation-agent-toggle');
+      agentUi.mount(root.querySelector('.documentation-agent-slot')); agentUi.root.id = 'documentation-agent-panel';
       setAgentVisible(true); renderAgent();
       agentToggle.addEventListener('click', () => setAgentVisible(agentUi.root.hidden));
       contentElement.addEventListener('click', async (event) => { const link = event.target?.closest?.('a[href]'); if (!link || !contentElement.contains(link)) return; const documentPath = resolveDocumentLink(link.getAttribute('href'), selectedPath, repository.documents); if (!documentPath) return; event.preventDefault(); try { await showDocument(documentPath); } catch (error) { showError(contentElement, error); } });
@@ -212,7 +212,7 @@ export default function createDocsPackage({ fetchFn = fetch, eventSourceFactory 
       setAgentVisible(agentVisible);
       root.hidden = false;
       connectEvents();
-      try { const state = await json('/api/docs/agent/state'); applySnapshot(state, true); await loadTree(); }
+      try { const state = await json('/api/documentation/agent/state'); applySnapshot(state, true); await loadTree(); }
       catch (error) { showError(treeElement, error); showError(contentElement, error); throw error; }
     },
     deactivate() { active = false; closeEvents(); root.hidden = true; },

@@ -12,8 +12,8 @@
       "module": "src/packages/home/index.ts",
       "source": ".resonance/home.html"
     },
-    "docs": {
-      "module": "src/packages/docs/index.ts",
+    "documentation": {
+      "module": "src/packages/documentation/index.ts",
       "extensions": [
         ".md",
         ".markdown"

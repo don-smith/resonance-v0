@@ -10,7 +10,7 @@ Resonance is a local, manifest-driven workspace for browsing and operating a rep
 - `src/` — host, HTTP, configuration, Markdown/content, and package-contract code; tests are colocated as `*.test.ts`.
 - `src/packages/shell/` — shared browser document, navigation, mounts, and bootstrap.
 - `src/packages/home/` — configured repository landing page.
-- `src/packages/docs/` — Markdown discovery, tree navigation, and document rendering.
+- `src/packages/documentation/` — Markdown discovery, tree navigation, and document rendering.
 - `scripts/` — local installation tooling.
 - `docs/` — architecture and usage documentation.
 - `test/fixtures/` — repository fixtures used by tests.
@@ -33,7 +33,7 @@ There is no declared lint, formatter, typecheck, or build script; do not assume 
 ## Architecture rules
 
 - Shell is required: it owns `/`, the browser bootstrap, navigation, and package mounts.
-- Home and Docs must keep their responsibilities within their package boundaries; member packages are owned by the external member-package repository.
+- Home and Documentation must keep their responsibilities within their package boundaries; member packages are owned by the external member-package repository.
 - Register package routes, assets, navigation, and browser entries through the shared contract in `src/package-contract.ts`; routes are namespaced under `/api/<package-id>/...` and assets under `/assets/<package-id>/...`.
 - Package configuration is an authoritative allowlist. Do not implicitly load omitted packages or revive legacy manifest behavior.
 - Package modules are app-root-relative. Repository files must be resolved through `HostContext.resolveRepositoryPath`; preserve repository-root containment.

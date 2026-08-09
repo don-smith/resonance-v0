@@ -8,7 +8,7 @@ import { createRepositoryConfig } from './config.ts';
 import { createHost } from './host.ts';
 import { loadConfiguredPackages } from './packages/index.ts';
 import { homeInput } from './packages/home/index.ts';
-import { docsPackage } from './packages/docs/index.ts';
+import { documentationPackage } from './packages/documentation/index.ts';
 import { createTelemetry } from './telemetry.ts';
 
 function packageDefinition(id, { order = 1, assetFile = 'src/packages/shell/app.js', extraRoute = false } = {}) {
@@ -29,11 +29,11 @@ function packageDefinition(id, { order = 1, assetFile = 'src/packages/shell/app.
 
 test('loads configured built-in modules and assembles a deterministic registry', async () => {
   const appRoot = fileURLToPath(new URL('../', import.meta.url));
-  const config = createRepositoryConfig({ home: true, docs: true });
+  const config = createRepositoryConfig({ home: true, documentation: true });
   const packages = await loadConfiguredPackages({ config, appRoot });
   const registry = createHost({ appRoot, config, packages });
-  assert.deepEqual(registry.manifest.navigation.map((item) => item.id), ['docs']);
-  assert.deepEqual(registry.manifest.packages.map((item) => item.id), ['shell', 'home', 'docs']);
+  assert.deepEqual(registry.manifest.navigation.map((item) => item.id), ['documentation']);
+  assert.deepEqual(registry.manifest.packages.map((item) => item.id), ['shell', 'home', 'documentation']);
   assert.equal(registry.assets['/assets/home/home.js'].file, 'src/packages/home/home.js');
   assert.ok(Object.isFrozen(registry.manifest));
 });
@@ -58,7 +58,7 @@ test('does not import modules omitted from the package allowlist', async () => {
 });
 
 test('skips disabled and invalid optional packages while keeping Shell required', async () => {
-  const config = { version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, home: { module: 'missing-home.ts' }, docs: { module: 'src/packages/docs/index.ts', enabled: false } } };
+  const config = { version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, home: { module: 'missing-home.ts' }, documentation: { module: 'src/packages/documentation/index.ts', enabled: false } } };
   const warnings = [];
   const packages = await loadConfiguredPackages({ config, appRoot: fileURLToPath(new URL('../', import.meta.url)), warn: (message) => warnings.push(message) });
   assert.deepEqual(packages.map((item) => item.metadata.id), ['shell']);
@@ -94,12 +94,12 @@ test('validates contributions and isolates optional registration failures', () =
   assert.match(malformedWarnings[0], /invalid registration/);
 });
 
-test('preserves Home validation and removes Docs aliases', () => {
+test('preserves Home validation and removes Documentation aliases', () => {
   assert.equal(homeInput({ source: '.resonance/home.html' }).source, '.resonance/home.html');
   assert.throws(() => homeInput({ source: 'home.txt' }), /Markdown file/);
-  const registry = createHost({ config: { version: 1, packages: { docs: { module: 'src/packages/docs/index.ts' } } }, packages: [docsPackage] });
-  assert.ok(registry.routes['GET /api/docs/tree']);
-  assert.ok(registry.routes['GET /api/docs/document']);
+  const registry = createHost({ config: { version: 1, packages: { documentation: { module: 'src/packages/documentation/index.ts' } } }, packages: [documentationPackage] });
+  assert.ok(registry.routes['GET /api/documentation/tree']);
+  assert.ok(registry.routes['GET /api/documentation/document']);
   assert.equal(registry.routes['GET /api/tree'], undefined);
 });
 

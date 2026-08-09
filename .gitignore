@@ -2,7 +2,7 @@
 node_modules/
 .myflow/
 .resonance/backlog-agent.env
-.resonance/docs-agent.env
+.resonance/documentation-agent.env
 .resonance/architecture-agent.env
 .resonance/.env
 .resonance/member-config.json

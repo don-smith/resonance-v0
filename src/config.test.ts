@@ -19,10 +19,10 @@ test('captures repository presentation metadata during installation', async () =
 
 test('builds install config with Shell and selected optional packages only', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-config-'));
-  const config = createRepositoryConfig({ home: true, docs: false });
+  const config = createRepositoryConfig({ home: true, documentation: false });
   assert.deepEqual(Object.keys(config.packages), ['shell', 'home']);
   assert.equal(config.packages.home.source, 'README.md');
-  assert.equal(config.packages.docs, undefined);
+  assert.equal(config.packages.documentation, undefined);
   await writeRepositoryConfig(root, config);
   assert.deepEqual(JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')), config);
   assert.deepEqual(await loadRepositoryConfig(root), config);
@@ -35,12 +35,12 @@ test('default install config contains the required Shell package', () => {
 test('loads package selections from .resonance/config.json', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-config-'));
   await mkdir(path.join(root, '.resonance'));
-  await writeFile(path.join(root, '.resonance', 'config.json'), JSON.stringify({ version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, home: { module: 'src/packages/home/index.ts', source: 'docs/index.md' }, docs: { module: 'src/packages/docs/index.ts', extensions: ['.markdown'] } } }));
+  await writeFile(path.join(root, '.resonance', 'config.json'), JSON.stringify({ version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, home: { module: 'src/packages/home/index.ts', source: 'docs/index.md' }, documentation: { module: 'src/packages/documentation/index.ts', extensions: ['.markdown'] } } }));
   const config = await loadRepositoryConfig(root);
   assert.equal(config.packages.home.module, 'src/packages/home/index.ts');
   assert.equal(config.packages.home.source, 'docs/index.md');
-  assert.deepEqual(config.packages.docs.extensions, ['.markdown']);
-  assert.deepEqual(Object.keys(config.packages), ['shell', 'home', 'docs']);
+  assert.deepEqual(config.packages.documentation.extensions, ['.markdown']);
+  assert.deepEqual(Object.keys(config.packages), ['shell', 'home', 'documentation']);
 });
 
 test('does not read or create a config from the legacy manifest', async () => {
@@ -55,8 +55,8 @@ test('validates manifest containers and enabled flags', () => {
   assert.throws(() => validateRepositoryConfig({ version: 2 }), /version must be 1/);
   assert.throws(() => validateRepositoryConfig({ version: 1 }), /packages must be an object/);
   assert.throws(() => validateRepositoryConfig({ version: 1, packages: [] }), /packages must be an object/);
-  assert.throws(() => validateRepositoryConfig({ version: 1, packages: { docs: [] } }), /inputs must be an object/);
-  assert.throws(() => validateRepositoryConfig({ version: 1, packages: { docs: { module: 'src/packages/docs/index.ts', enabled: 'yes' } } }), /enabled must be a boolean/);
+  assert.throws(() => validateRepositoryConfig({ version: 1, packages: { documentation: [] } }), /inputs must be an object/);
+  assert.throws(() => validateRepositoryConfig({ version: 1, packages: { documentation: { module: 'src/packages/documentation/index.ts', enabled: 'yes' } } }), /enabled must be a boolean/);
   assert.throws(() => validateRepositoryConfig({ version: 1, repository: { tagline: 42 }, packages: {} }), /repository tagline must be a string/);
   assert.deepEqual(validateRepositoryConfig({ version: 1, repository: { name: 'fixture', tagline: '' }, packages: {} }).repository, { name: 'fixture', tagline: '' });
   assert.equal(validateRepositoryConfig({ version: 1, packages: { custom: { module: 'src/packages/custom/index.ts', enabled: false } } }).packages.custom.enabled, false);

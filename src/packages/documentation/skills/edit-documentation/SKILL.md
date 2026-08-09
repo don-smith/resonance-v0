@@ -1,9 +1,9 @@
 ---
-name: edit-docs
+name: edit-documentation
 description: Safely improve repository Markdown documents from an active document and optional highlighted passage.
 ---
 
-# Edit Docs
+# Edit Documentation
 
 - Treat the active document path and its contents as the primary context.
 - If the user highlights text, address that passage first and preserve surrounding intent.

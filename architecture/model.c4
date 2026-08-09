@@ -555,7 +555,7 @@ model {
     }
 
     content = container "Content engine" {
-      description "Provides shared Markdown rendering, file discovery, and document tree building used by the Home and Docs packages."
+      description "Provides shared Markdown rendering, file discovery, and document tree building used by the Home and Documentation packages."
       technology "TypeScript + markdown-it"
       link ./src/markdown.ts "Source"
 
@@ -642,14 +642,14 @@ model {
       link ./src/config.ts "Source"
 
       configFactory = component "Config factory" {
-        description "Assembles RepositoryConfig objects with sensible defaults for shell, home, and docs packages."
+        description "Assembles RepositoryConfig objects with sensible defaults for shell, home, and documentation packages."
         technology "TypeScript"
         link ./src/config.ts "Source"
 
         createRepoConfigFn = code "createRepositoryConfig()" {
           description """
-            Assembles a RepositoryConfig from optional flags (`home`, `docs`)
-            and metadata, applying defaults for shell/home/docs package entries
+            Assembles a RepositoryConfig from optional flags (`home`, `documentation`)
+            and metadata, applying defaults for shell/home/documentation package entries
             and the manifest version.
           """
           technology "TypeScript"
@@ -875,22 +875,22 @@ model {
       }
     }
 
-    docs = container "Docs" {
+    documentation = container "Documentation" {
       metadata {
-        source "src/packages/docs/index.ts"
-        symbol "docsPackage"
+        source "src/packages/documentation/index.ts"
+        symbol "documentationPackage"
         declaration_kind "package"
       }
       description "Discovers and renders repository Markdown documents."
       technology "TypeScript"
-      link ./src/packages/docs/index.ts "Source"
+      link ./src/packages/documentation/index.ts "Source"
 
       treeHandler = component "Document tree handler" {
         description "Serves the full repository document tree as JSON including root name, flat document list, and nested folder structure."
         technology "TypeScript"
-        link ./src/packages/docs/index.ts "Source"
+        link ./src/packages/documentation/index.ts "Source"
 
-        docsOptionsType = code "DocsOptions" {
+        documentationOptionsType = code "DocumentationOptions" {
           description """
             Input options: `extensions` (default ['.md', '.markdown'])
             and `ignoredDirectories` (default ['.git', 'node_modules']).
@@ -906,9 +906,9 @@ model {
           technology "TypeScript"
         }
 
-        docsInputFn = code "docsInput()" {
+        documentationInputFn = code "documentationInput()" {
           description """
-            Validates and normalises package input into DocsOptions.
+            Validates and normalises package input into DocumentationOptions.
             Applies defaults for extensions and ignoredDirectories,
             then copies the arrays to prevent external mutation.
           """
@@ -928,7 +928,7 @@ model {
         registerFn = code "register()" {
           description """
             Package entry point called by the host. Validates input
-            through docsInput(), creates tree and document route
+            through documentationInput(), creates tree and document route
             handlers, and returns a PackageRegistration with routes,
             assets, navigation, and browser mount configuration.
           """
@@ -937,26 +937,26 @@ model {
 
         metadataConst = code "metadata" {
           description """
-            Immutable package identity: `id: 'docs'`, `version: '1.0.0'`,
-            `hostVersion: '1'`, `label: 'Docs'`, `order: 20`.
+            Immutable package identity: `id: 'documentation'`, `version: '1.0.0'`,
+            `hostVersion: '1'`, `label: 'Documentation'`, `order: 20`.
           """
           technology "TypeScript"
         }
 
-        docsPackageDef = code "docsPackage" {
+        documentationPackageDef = code "documentationPackage" {
           description """
             Exported PackageDefinition: `{ metadata, register }`.
           """
           technology "TypeScript"
         }
 
-        registerFn -> docsInputFn "calls"
+        registerFn -> documentationInputFn "calls"
         registerFn -> createRouteHandlerFn "calls"
-        docsInputFn -> isStringArrayFn "validates with"
-        docsInputFn -> docsOptionsType "produces"
-        createRouteHandlerFn -> docsOptionsType "consumes"
-        docsPackageDef -> registerFn "wraps"
-        docsPackageDef -> metadataConst "references"
+        documentationInputFn -> isStringArrayFn "validates with"
+        documentationInputFn -> documentationOptionsType "produces"
+        createRouteHandlerFn -> documentationOptionsType "consumes"
+        documentationPackageDef -> registerFn "wraps"
+        documentationPackageDef -> metadataConst "references"
 
         createRouteHandlerFn -> resonanceRuntime.content.fileDiscovery.discoverMarkdownFilesFn "calls"
         createRouteHandlerFn -> resonanceRuntime.content.fileDiscovery.buildMarkdownTreeFn "calls"
@@ -966,7 +966,7 @@ model {
       documentHandler = component "Document handler" {
         description "Resolves a repository-relative path, reads the Markdown source, and returns both raw content and rendered HTML."
         technology "TypeScript"
-        link ./src/packages/docs/index.ts "Source"
+        link ./src/packages/documentation/index.ts "Source"
       }
 
       documentHandler -> treeHandler "shares handler factory and routes"
@@ -1656,7 +1656,7 @@ model {
       required true
     }
   }
-  resonancePackages.docs -> resonanceRuntime.host "Registers through" {
+  resonancePackages.documentation -> resonanceRuntime.host "Registers through" {
     metadata {
       verification "runtime-registration"
       required true
@@ -1676,14 +1676,14 @@ model {
   }
 
   resonancePackages.home -> targetRepository "Reads landing source"
-  resonancePackages.docs -> targetRepository "Reads Markdown"
+  resonancePackages.documentation -> targetRepository "Reads Markdown"
   resonancePackages.backlog -> targetRepository "Reads backlog decisions"
   resonancePackages.architecture -> targetRepository "Reads LikeC4 model and evidence"
   resonancePackages.architecture -> llmProvider "Makes LLM calls through"
   resonancePackages.backlog -> llmProvider "Makes LLM calls through"
 
   resonancePackages.home -> resonanceRuntime.content "Uses content engine"
-  resonancePackages.docs -> resonanceRuntime.content "Uses content engine"
+  resonancePackages.documentation -> resonanceRuntime.content "Uses content engine"
 
   resonanceRuntime.server.requestRouter -> resonanceRuntime.server.assetServer "Delegates asset requests to"
 
@@ -1719,7 +1719,7 @@ deployment {
     instanceOf resonancePackages {
       description """
         Package instances loaded from both the main clone (core packages:
-        shell, home, docs, backlog, architecture) and the my-packages
+        shell, home, documentation, backlog, architecture) and the my-packages
         clone (member packages authored by the developer).
       """
     }
@@ -1892,7 +1892,7 @@ views {
     description """
       Functions and calling patterns inside the Config Factory component.
       Shows how `defaultRepositoryConfig()` delegates to `createRepositoryConfig()`,
-      which assembles a RepositoryConfig with shell/home/docs package defaults.
+      which assembles a RepositoryConfig with shell/home/documentation package defaults.
     """
 
     include
@@ -1987,9 +1987,9 @@ views {
       resonanceRuntime.host.transport.hostContext
   }
 
-  view docsComponents of resonancePackages.docs {
-    title "Docs components"
-    description "The components inside the Docs package container."
+  view documentationComponents of resonancePackages.documentation {
+    title "Documentation components"
+    description "The components inside the Documentation package container."
 
     include
       treeHandler,
@@ -1997,11 +1997,11 @@ views {
       resonanceRuntime
   }
 
-  view docsTreeCode of resonancePackages.docs.treeHandler {
+  view documentationTreeCode of resonancePackages.documentation.treeHandler {
     title "Document tree handler"
     description """
       Functions, types, and calling patterns inside the Document tree
-      handler. Shows how `register()` wires the /api/docs/tree route
+      handler. Shows how `register()` wires the /api/documentation/tree route
       through `createRouteHandler()`, which calls the file discovery
       engine to build the document tree.
       Excludes `isStringArray()` (validation helper) and
@@ -2011,15 +2011,15 @@ views {
     include
       // ── Internal functions ──────────────────────────
       createRouteHandlerFn,
-      docsInputFn,
+      documentationInputFn,
       registerFn,
 
       // ── Internal type ───────────────────────────────
-      docsOptionsType,
+      documentationOptionsType,
 
       // ── Package contract ────────────────────────────
       metadataConst,
-      docsPackageDef,
+      documentationPackageDef,
 
       // ── External collaborators ───────────────────────
       resonanceRuntime.content.fileDiscovery.discoverMarkdownFilesFn,
@@ -2032,7 +2032,7 @@ views {
       resonanceRuntime.host.transport.hostContext
   }
 
-  view docsDocumentCode of resonancePackages.docs.documentHandler {
+  view documentationDocumentCode of resonancePackages.documentation.documentHandler {
     title "Document handler"
     description """
       Shows how the Document handler resolves a repository-relative

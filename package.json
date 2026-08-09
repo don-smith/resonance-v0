@@ -25,9 +25,9 @@
     "lint": "bun run format:check && bun run lint:markdown",
     "build:architecture": "bun build src/packages/architecture/architecture-source.js --outfile src/packages/architecture/architecture.js --target browser --format esm --minify",
     "build:backlog": "bun build src/packages/backlog/backlog-source.js --outfile src/packages/backlog/backlog.js --target browser --format esm --minify",
-    "build:docs": "bun build src/packages/docs/docs-source.js --outfile src/packages/docs/docs.js --target browser --format esm --minify",
+    "build:documentation": "bun build src/packages/documentation/documentation-source.js --outfile src/packages/documentation/documentation.js --target browser --format esm --minify",
     "build:doctor": "bun build src/packages/doctor/doctor-source.js --outfile src/packages/doctor/doctor.js --target browser --format esm --minify",
-    "build:browser": "bun run build:backlog && bun run build:architecture && bun run build:docs && bun run build:doctor",
+    "build:browser": "bun run build:backlog && bun run build:architecture && bun run build:documentation && bun run build:doctor",
     "resonate": "resonate"
   },
   "dependencies": {

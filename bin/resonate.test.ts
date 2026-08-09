@@ -32,21 +32,21 @@ test('declining first-run installation leaves the repository untouched', async (
 
 test('first-run approval installs selected packages before starting', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); const openedUrls = []; const fakeServer = { address: () => ({ port: 4318 }) };
-  const server = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({ home: true, docs: false }), startServerFn: async ({ config }) => { assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: () => {} });
+  const server = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({ home: true, documentation: false }), startServerFn: async ({ config }) => { assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: () => {} });
   assert.equal(server, fakeServer); assert.deepEqual(openedUrls, ['http://127.0.0.1:4318']);
   const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); assert.equal(config.packages.home.source, 'README.md'); assert.equal(config.repository.name, path.basename(root)); assert.equal(config.repository.tagline, '');
 });
 
 test('install subcommand creates Shell and selected optional packages only', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); let started = false;
-  const result = await run(['install'], { root, selectPackagesFn: async () => ({ home: false, docs: true }), startServerFn: async () => { started = true; return null; }, log: () => {} });
+  const result = await run(['install'], { root, selectPackagesFn: async () => ({ home: false, documentation: true }), startServerFn: async () => { started = true; return null; }, log: () => {} });
   assert.equal(result, null); assert.equal(started, false);
-  const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'docs']); assert.deepEqual(config.packages.docs.ignoredDirectories, ['.git', 'node_modules']);
+  const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'documentation']); assert.deepEqual(config.packages.documentation.ignoredDirectories, ['.git', 'node_modules']);
 });
 
 test('install subcommand preserves an existing repository configuration', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-'));
-  await run(['install'], { root, selectPackagesFn: async () => ({ home: true, docs: false }), log: () => {} });
+  await run(['install'], { root, selectPackagesFn: async () => ({ home: true, documentation: false }), log: () => {} });
   await run(['install'], { root, selectPackagesFn: async () => { throw new Error('must not prompt'); }, log: () => {} });
   const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'home']);
 });
@@ -98,11 +98,11 @@ test('interactive member package selection completes on Enter and cancels on con
   }
 });
 
-test('non-interactive package selection accepts Home and Docs answers', async () => {
+test('non-interactive package selection accepts Home and Documentation answers', async () => {
   const input = new EventEmitter(); input.isTTY = false; const output = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
   const selection = selectOptionalPackages({ input, output });
   input.emit('data', 'y\nn\n'); input.emit('end');
-  assert.deepEqual(await selection, { home: true, docs: false });
+  assert.deepEqual(await selection, { home: true, documentation: false });
 });
 
 test('interactive package selection exits on Escape and restores terminal input', async () => {
@@ -116,7 +116,7 @@ test('interactive package selection handles arrows, space, and Enter', async () 
   const input = new EventEmitter(); input.isTTY = true; input.rawMode = false; input.setRawMode = (value) => { input.rawMode = value; }; const output = new Writable({ write(_chunk, _encoding, callback) { callback(); } }); output.isTTY = true;
   const selection = selectOptionalPackages({ input, output });
   input.emit('data', '\x1b[B \r');
-  assert.deepEqual(await selection, { home: false, docs: true }); assert.equal(input.rawMode, false);
+  assert.deepEqual(await selection, { home: false, documentation: true }); assert.equal(input.rawMode, false);
 });
 
 test('interactive package selection treats Ctrl+C and Ctrl+D as cancellation', async () => {

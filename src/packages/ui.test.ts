@@ -23,7 +23,7 @@ test('the Shell document contains only fixed Shell browser wiring', async () => 
   assert.match(html, /assets\/shell\/shell\.css/);
   assert.match(html, /assets\/app\.js/);
   assert.doesNotMatch(html, /assets\/home\/home\.css/);
-  assert.doesNotMatch(html, /assets\/docs\/docs\.css/);
+  assert.doesNotMatch(html, /assets\/documentation\/documentation\.css/);
   assert.doesNotMatch(html, retiredTerm);
 });
 
@@ -51,9 +51,9 @@ test('the Shell keeps primary navigation fixed while the package area scrolls', 
   assert.doesNotMatch(css, /@media \(max-width: 720px\)[\s\S]*\.primary-footer \{[^}]*display: none;/s);
 });
 
-test('the Docs keeps its tree fixed while both panes scroll when needed', async () => {
-  const css = await readFile(new URL('./docs/docs.css', import.meta.url), 'utf8');
-  assert.match(css, /\.docs-layout \{[^}]*height: 100%;[^}]*min-height: 0;[^}]*overflow: hidden;/s);
+test('the Documentation keeps its tree fixed while both panes scroll when needed', async () => {
+  const css = await readFile(new URL('./documentation/documentation.css', import.meta.url), 'utf8');
+  assert.match(css, /\.documentation-layout \{[^}]*height: 100%;[^}]*min-height: 0;[^}]*overflow: hidden;/s);
   assert.match(css, /\.document-sidebar \{[^}]*display: flex;[^}]*height: 100%;[^}]*min-height: 0;[^}]*overflow: hidden;[^}]*padding: 32px 10px 20px 20px;/s);
   assert.match(css, /\.document-sidebar h2 \{[^}]*font: 400 28px\/1 var\(--display\);/s);
   assert.doesNotMatch(css, /\.document-sidebar \.eyebrow \{/);
@@ -63,7 +63,7 @@ test('the Docs keeps its tree fixed while both panes scroll when needed', async 
   assert.match(css, /\.document-header \{[^}]*margin: 0;[^}]*padding: 28px 52px 20px;[^}]*border-bottom: 1px solid var\(--line\);/s);
   assert.doesNotMatch(css, /\.document-header \{[^}]*max-width:/s);
   assert.match(css, /\.document-pane \{[^}]*height: 100%;[^}]*min-height: 0;[^}]*overflow-y: auto;/s);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.docs-layout \{[^}]*height: auto;[^}]*overflow: visible;/s);
+  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.documentation-layout \{[^}]*height: auto;[^}]*overflow: visible;/s);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.document-sidebar \{[^}]*height: auto;[^}]*overflow: visible;/s);
   assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.document-pane \{[^}]*height: auto;[^}]*overflow: visible;/s);
 });

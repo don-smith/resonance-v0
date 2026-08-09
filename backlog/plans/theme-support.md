@@ -7,7 +7,7 @@ We are much closer to theme support than it appears, and dark mode does not requ
 - Styling is not inline. It lives in five package stylesheets totaling about 260 lines:
   - src/packages/shell/styles.css
   - src/packages/home/home.css
-  - src/packages/docs/docs.css
+  - src/packages/documentation/documentation.css
   - src/packages/backlog/backlog.css
   - src/packages/architecture/architecture.css
 - Shell already defines shared CSS variables such as --paper, --ink, --muted, --line, and --accent.

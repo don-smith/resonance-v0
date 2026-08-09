@@ -84,12 +84,12 @@ Telemetry is created by the registry and injected into all packages via `HostCon
 - Route: `GET /api/home` — reads a configured Markdown/HTML file (default: `README.md`) and renders it to HTML
 - Uses `HostContext.resolveRepositoryPath()` for safe file access
 
-### 3. **Docs** (`src/packages/docs/`)
+### 3. **Documentation** (`src/packages/documentation/`)
 
 > _"Discovers and renders repository Markdown documents."_
 
 - **Order 20**
-- Routes: `GET /api/docs/tree` (discovers all markdown), `GET /api/docs/document?path=...` (reads one)
+- Routes: `GET /api/documentation/tree` (discovers all markdown), `GET /api/documentation/document?path=...` (reads one)
 - Uses `discoverMarkdownFiles()`, `buildMarkdownTree()`, `readMarkdown()` from `src/content.ts`
 - Configurable extensions and ignored directories
 
@@ -215,7 +215,7 @@ The server composes everything:
                               │                    │                      │
                           shell/              architecture/          backlog/
                           home/               (12 routes,            (7 routes,
-                          docs/                agent, store,          agent, store,
+                          documentation/                agent, store,          agent, store,
                           (1-2 routes,         checkers,              deepagents)
                            content)            deepagents)
 ```

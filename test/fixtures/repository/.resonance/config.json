@@ -3,8 +3,8 @@
   "packages": {
     "shell": { "module": "src/packages/shell/index.ts" },
     "home": { "module": "src/packages/home/index.ts", "source": "home.md" },
-    "docs": {
-      "module": "src/packages/docs/index.ts",
+    "documentation": {
+      "module": "src/packages/documentation/index.ts",
       "extensions": [".md", ".markdown"],
       "ignoredDirectories": [".git", "node_modules"]
     }

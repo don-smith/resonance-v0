@@ -174,7 +174,7 @@ This keeps checker behavior local and testable while `rules.json` remains the au
 2. **Package-to-host dependencies use an explicit allowlist.** Start with `package-contract.ts` and deliberately approved shared Markdown/content modules. Imports of `host.ts`, `server.ts`, `http.ts`, config/member loaders, or state implementation from a package should fail unless a decision explicitly permits one.
 3. **Package code does not depend on Node HTTP objects.** This directly protects the package-safe request/response seam.
 4. **No cycles between top-level runtime modules and package modules.** Report type-only and runtime cycles distinctly, but count both as architectural coupling.
-5. **Bound LikeC4 sources exist and belong to the declared seam.** A package/container bound to `src/packages/docs/**` must not silently move into another package.
+5. **Bound LikeC4 sources exist and belong to the declared seam.** A package/container bound to `src/packages/documentation/**` must not silently move into another package.
 6. **Selected modeled static dependencies match observed imports.** Start only with container/component relationships tagged `verification = "static-dependency"`; do not reinterpret HTTP, SSE, data-flow, ownership, or human interaction arrows as imports.
 7. **Optional package implementations remain behind the configuration/composition seam.** Prefer an observed dependency rule over a brittle textual check for “dependency injection.”
 

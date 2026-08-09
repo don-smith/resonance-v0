@@ -53,4 +53,4 @@ The configured module must load successfully and default-export the Shell packag
 
 Package styles inherit Shell's semantic CSS variables from the document root. Use `--paper`, `--paper-deep`, `--ink`, `--ink-soft`, `--muted`, `--faint`, `--line`, `--line-strong`, `--accent`, `--accent-soft`, `--danger`, `--danger-surface`, `--success`, and `--warning` instead of fixed theme-sensitive colors. Shell also provides sidebar, code, typography, and diagram tokens for their corresponding surfaces. The resolved `data-theme` on the document root is `light` or `dark`; `data-theme-preference` preserves the selected `light`, `dark`, or `system` mode.
 
-The Shell intentionally does not discover Markdown, render repository content, or select a Home source. Those policies belong to the Home and Docs packages.
+The Shell intentionally does not discover Markdown, render repository content, or select a Home source. Those policies belong to the Home and Documentation packages.

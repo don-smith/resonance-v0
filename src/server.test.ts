@@ -10,7 +10,7 @@ import { createTelemetry } from './telemetry.ts';
 
 const fixtureRoot = new URL('../test/fixtures/repository/', import.meta.url);
 const appRoot = new URL('../', import.meta.url);
-const moduleConfig = createRepositoryConfig({ home: true, docs: true });
+const moduleConfig = createRepositoryConfig({ home: true, documentation: true });
 function configWith(overrides) { return { version: 1, packages: { ...moduleConfig.packages, ...overrides } }; }
 function packageDefinition() {
   const metadata = { id: 'test', version: '1.0.0', hostVersion: '1', label: 'Test', order: 1 };
@@ -45,18 +45,20 @@ async function withServer(run, options = {}) {
   finally { await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
 }
 
-test('serves canonical Docs routes and rejects removed aliases', async () => {
+test('serves canonical Documentation routes and rejects removed aliases', async () => {
   const config = await loadRepositoryConfig(fixtureRoot);
   await withServer(async (baseUrl) => {
-    const tree = await fetch(`${baseUrl}/api/docs/tree`);
+    const tree = await fetch(`${baseUrl}/api/documentation/tree`);
     assert.equal(tree.status, 200);
     assert.deepEqual((await tree.json()).documents, ['README.md', 'docs/architecture.md', 'docs/guides/getting-started.md', 'home.md']);
-    const documentResponse = await fetch(`${baseUrl}/api/docs/document?path=docs%2Farchitecture.md`);
+    const documentResponse = await fetch(`${baseUrl}/api/documentation/document?path=docs%2Farchitecture.md`);
     assert.equal(documentResponse.status, 200);
     assert.equal((await documentResponse.json()).path, 'docs/architecture.md');
+    assert.equal((await fetch(`${baseUrl}/api/docs/tree`)).status, 404);
+    assert.equal((await fetch(`${baseUrl}/api/docs/document?path=README.md`)).status, 404);
     assert.equal((await fetch(`${baseUrl}/api/tree`)).status, 404);
     assert.equal((await fetch(`${baseUrl}/api/document?path=README.md`)).status, 404);
-    assert.equal((await fetch(`${baseUrl}/api/docs/document?path=.git%2Fignored.md`)).status, 404);
+    assert.equal((await fetch(`${baseUrl}/api/documentation/document?path=.git%2Fignored.md`)).status, 404);
   }, { config });
 });
 
@@ -67,9 +69,9 @@ test('serves configured repository Home content and preserves HTML', async () =>
 
 test('serves package-local assets through preserved public URLs', async () => {
   await withServer(async (baseUrl) => {
-    const home = await fetch(`${baseUrl}/assets/home/home.js`); const docs = await fetch(`${baseUrl}/assets/docs/docs.css`); const shell = await fetch(`${baseUrl}/assets/app.js`); const theme = await fetch(`${baseUrl}/assets/shell/theme-bootstrap.js`);
+    const home = await fetch(`${baseUrl}/assets/home/home.js`); const documentation = await fetch(`${baseUrl}/assets/documentation/documentation.css`); const shell = await fetch(`${baseUrl}/assets/app.js`); const theme = await fetch(`${baseUrl}/assets/shell/theme-bootstrap.js`);
     assert.equal(home.status, 200); assert.match(await home.text(), /export default/);
-    assert.equal(docs.status, 200); assert.match(await docs.text(), /docs-layout/);
+    assert.equal(documentation.status, 200); assert.match(await documentation.text(), /documentation-layout/);
     assert.equal(shell.status, 200); assert.match(await shell.text(), /import\(packageInfo\.entry\)/);
     assert.equal(theme.status, 200); assert.match(await theme.text(), /prefers-color-scheme: dark/);
     assert.equal((await fetch(`${baseUrl}/not-registered.js`)).status, 404);
@@ -114,12 +116,12 @@ test('dispatches methods, bounds JSON bodies, and protects streamed responses', 
   assert.equal(log.disposed, 1);
 });
 
-test('starts from an explicitly installed Shell+Docs config', async () => {
+test('starts from an explicitly installed Shell+Documentation config', async () => {
   const root = await mkdtemp(`${tmpdir()}/resonance-generated-`);
-  await writeRepositoryConfig(root, createRepositoryConfig({ docs: true }));
+  await writeRepositoryConfig(root, createRepositoryConfig({ documentation: true }));
   await withServer(async (baseUrl) => {
     const manifest = await fetch(`${baseUrl}/api/manifest`).then((response) => response.json());
-    assert.deepEqual(manifest.packages.map((item) => item.id), ['shell', 'docs']);
+    assert.deepEqual(manifest.packages.map((item) => item.id), ['shell', 'documentation']);
   }, { root });
 });
 

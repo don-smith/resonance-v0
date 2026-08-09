@@ -110,7 +110,7 @@ export async function askToInstall({ input = process.stdin, output = process.std
   finally { prompt.close(); input.resume?.(); }
 }
 
-const OPTIONAL_PACKAGES = [{ id: 'home', label: 'Home (README.md)' }, { id: 'docs', label: 'Docs' }];
+const OPTIONAL_PACKAGES = [{ id: 'home', label: 'Home (README.md)' }, { id: 'documentation', label: 'Documentation' }];
 
 export async function selectMemberPackages({ manifest, input = process.stdin, output = process.stdout } = {}) {
   const packages = Object.entries(manifest.packages).map(([id, value]) => ({ id, label: value.label || id }));
@@ -139,14 +139,14 @@ export async function selectOptionalPackages({ input = process.stdin, output = p
     output.write('Install Home package? [y/N] ');
     try {
       const home = /^(y|yes)$/i.test((await reader.next()).trim());
-      output.write('Install Docs package? [y/N] ');
-      const docs = /^(y|yes)$/i.test((await reader.next()).trim());
-      return { home, docs };
+      output.write('Install Documentation package? [y/N] ');
+      const documentation = /^(y|yes)$/i.test((await reader.next()).trim());
+      return { home, documentation };
     } finally { reader.close(); }
   }
 
   return new Promise((resolve) => {
-    let cursor = 0; const selected = { home: false, docs: false }; let rendered = false; let inputBuffer = '';
+    let cursor = 0; const selected = { home: false, documentation: false }; let rendered = false; let inputBuffer = '';
     const render = () => {
       if (rendered) moveCursor(output, 0, -OPTIONAL_PACKAGES.length);
       for (const line of checkboxLines(cursor, selected)) { cursorTo(output, 0); clearLine(output, 0); output.write(line); output.write('\n'); }

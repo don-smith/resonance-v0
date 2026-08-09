@@ -36,7 +36,7 @@ test('records completed and failed spans through the exporter seam', async () =>
   const records: any[] = [];
   let flushes = 0;
   const telemetry = createTelemetry({ config: { mode: 'console', level: 'error' }, console: null, exporter: { record(record) { records.push(record); }, async flush() { flushes += 1; } } });
-  const completed = telemetry.span('complete', { package: 'docs' });
+  const completed = telemetry.span('complete', { package: 'documentation' });
   completed.event('checkpoint', { count: 2 });
   completed.end({ status: 200 });
   const failed = telemetry.span('failed');

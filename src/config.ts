@@ -6,20 +6,20 @@ import { repositoryName } from './repository-metadata.ts';
 
 export const MANIFEST_NAME = '.resonance/config.json';
 const DEFAULT_HOME: PackageInput = { source: 'README.md' };
-const DEFAULT_DOCS: PackageInput = { extensions: ['.md', '.markdown'], ignoredDirectories: ['.git', 'node_modules'] };
+const DEFAULT_DOCUMENTATION: PackageInput = { extensions: ['.md', '.markdown'], ignoredDirectories: ['.git', 'node_modules'] };
 const DEFAULT_MODULES = {
   shell: 'src/packages/shell/index.ts',
   home: 'src/packages/home/index.ts',
-  docs: 'src/packages/docs/index.ts',
+  documentation: 'src/packages/documentation/index.ts',
 } as const;
 
 function toPath(value: string | URL): string { return value instanceof URL ? fileURLToPath(value) : value; }
 function isRecord(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 
-export function createRepositoryConfig({ home = false, docs = false, root, repository }: { home?: boolean; docs?: boolean; root?: string | URL; repository?: RepositoryConfigMetadata } = {}): RepositoryConfig {
+export function createRepositoryConfig({ home = false, documentation = false, root, repository }: { home?: boolean; documentation?: boolean; root?: string | URL; repository?: RepositoryConfigMetadata } = {}): RepositoryConfig {
   const packages: Record<string, PackageConfig> = { shell: { module: DEFAULT_MODULES.shell } };
   if (home) packages.home = { module: DEFAULT_MODULES.home, ...DEFAULT_HOME };
-  if (docs) packages.docs = { module: DEFAULT_MODULES.docs, extensions: [...(DEFAULT_DOCS.extensions as string[])], ignoredDirectories: [...(DEFAULT_DOCS.ignoredDirectories as string[])] };
+  if (documentation) packages.documentation = { module: DEFAULT_MODULES.documentation, extensions: [...(DEFAULT_DOCUMENTATION.extensions as string[])], ignoredDirectories: [...(DEFAULT_DOCUMENTATION.ignoredDirectories as string[])] };
   const metadata = root ? { name: repository?.name ?? repositoryName(root), tagline: repository?.tagline ?? '' } : repository;
   return { version: MANIFEST_VERSION, ...(metadata ? { repository: metadata } : {}), packages };
 }
