@@ -57,7 +57,7 @@ const ruleSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().max(4000),
   appliesTo: z.array(z.string().min(1)).max(200),
-  checker: z.enum(['authoritative-config', 'package-ownership', 'route-asset-namespacing', 'repository-containment', 'git-revision']),
+  checker: z.enum(['authoritative-config', 'shell-required', 'package-ownership', 'route-asset-namespacing', 'repository-containment', 'git-revision']),
   severity: z.enum(['error', 'warning', 'info']),
   constraints: z.record(z.string(), z.unknown()).optional(),
 }).strict();
@@ -71,9 +71,9 @@ export type ArchitectureViews = z.infer<typeof viewsSchema>;
 export type ArchitectureRules = z.infer<typeof rulesSchema>;
 export type ArchitecturePatterns = z.infer<typeof patternsSchema>;
 export type ArchitectureDecisions = z.infer<typeof decisionsSchema>;
-export type ArchitectureArtifacts = { model: ArchitectureModel; views: ArchitectureViews; rules: ArchitectureRules; patterns: ArchitecturePatterns; decisions: ArchitectureDecisions; revision: string };
+export type ArchitectureArtifacts = { model: ArchitectureModel; views: ArchitectureViews; rules: ArchitectureRules; patterns: ArchitecturePatterns; decisions: ArchitectureDecisions; revision: string; artifactRoot: string; likec4Sources: string[]; likec4Revision: string };
 export type ArchitectureMutation = { revision: string; affectedPaths: string[] };
-export type LikeC4Snapshot = { dump: unknown; views: Array<{ id: string; name: string; type: 'element' | 'dynamic' | 'deployment'; description?: string; parentId?: string }>; revision: string };
+export type LikeC4Snapshot = { dump: unknown; views: Array<{ id: string; name: string; type: 'element' | 'dynamic' | 'deployment'; description?: string; parentId?: string }>; revision: string; sources: string[] };
 export type ArchitectureStore = {
   read(): Promise<ArchitectureArtifacts>;
   likec4(): Promise<LikeC4Snapshot>;
@@ -166,13 +166,16 @@ export function createArchitectureStore({ context, artifactRoot = 'architecture'
         const parent = candidates.find((candidate) => candidate.$view.nodes.some((node) => node.modelRef === childScope && node.navigateTo === child.id)) || candidates[0];
         if (parent) parentByView.set(child.id, parent.id);
       }
-      const views = modelViews.map((view) => ({ id: view.id, name: view.title || view.id, type: view.$view._type, ...(view.description ? { description: view.description } : {}), ...(parentByView.has(view.id) ? { parentId: parentByView.get(view.id) } : {}) }));
-      return { dump: model.$data, views, revision: hash(sources) };
+      const views = modelViews.map((view) => ({ id: view.id, name: view.title || view.id, type: view.$view._type, ...(typeof view.description === 'string' ? { description: view.description } : {}), ...(parentByView.has(view.id) ? { parentId: parentByView.get(view.id) } : {}) }));
+      return { dump: model.$data, views, revision: hash(sources), sources: Object.keys(sources).sort() };
     } finally { await likec4.dispose(); }
   };
   const read = async (): Promise<ArchitectureArtifacts> => {
     const sources = await readSources();
-    return { model: parse('model', sources.model), views: parse('views', sources.views), rules: parse('rules', sources.rules), patterns: parse('patterns', sources.patterns), decisions: parse('decisions', sources.decisions), revision: hash(sources) };
+    const likec4Sources = await readLikeC4Sources(artifactDirectory);
+    const revisionSources: Record<string, string> = { ...sources };
+    for (const [relative, source] of Object.entries(likec4Sources)) revisionSources[`likec4:${relative}`] = source;
+    return { model: parse('model', sources.model), views: parse('views', sources.views), rules: parse('rules', sources.rules), patterns: parse('patterns', sources.patterns), decisions: parse('decisions', sources.decisions), revision: hash(revisionSources), artifactRoot, likec4Sources: Object.keys(likec4Sources).sort(), likec4Revision: hash(likec4Sources) };
   };
   const atomicWrite = async (filename: string, source: string) => {
     const physicalRoot = await realpath(repositoryRoot);

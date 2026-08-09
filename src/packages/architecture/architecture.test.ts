@@ -90,7 +90,7 @@ test('expands the architecture surface when the agent is hidden and aligns panel
   assert.match(css, /\.architecture-workspace\.architecture-agent-hidden \{[^}]*grid-template-columns: minmax\(180px, 220px\) minmax\(0, 1fr\);/s);
   assert.match(css, /\.architecture-header \{[^}]*padding: 28px 52px 20px;/s);
   assert.doesNotMatch(css, /\.architecture-header \{[^}]*min-height:/s);
-  assert.match(css, /\.architecture-header-actions \{[^}]*position: absolute;[^}]*top: 50%;[^}]*right: 52px;/s);
+  assert.match(css, /\.architecture-header-actions \{[^}]*position: absolute;[^}]*top: 50%;[^}]*right: 20px;/s);
   assert.match(sharedCss, /\.resonance-agent-header \{[^}]*padding: 28px 20px 20px;/s);
   assert.match(sharedCss, /\.resonance-agent-panel \{[^}]*height: 100%;[^}]*min-height: 0;/s);
   assert.match(sharedCss, /\.resonance-agent-transcript \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;/s);
@@ -173,9 +173,67 @@ test('reads projections, creates deterministic graphs, and validates local evide
     assert.equal(graph.nodes.some((node) => node.id === 'resonanceRuntime'), true);
     const evidence = await store.readEvidence('src/host.ts');
     assert.equal(evidence.entities.includes('host'), true);
-    const validation = await validateArchitecture(context(root), artifacts);
+    const validation = await validateArchitecture(context(root), artifacts, { likec4: store.likec4 });
     assert.equal(validation.results.every((result) => ['pass', 'fail', 'unknown'].includes(result.status)), true);
+    assert.equal(validation.results.find((result) => result.ruleId === 'canonical-likec4-model')?.status, 'pass');
+    assert.equal(validation.results.find((result) => result.ruleId === 'shell-is-required')?.checker, 'shell-required');
     assert.equal(validation.results.find((result) => result.ruleId === 'authoritative-package-configuration')?.status, 'pass');
+    assert.equal(validation.coverage.relationships.required > 0, true);
+    assert.equal(validation.summary.total, validation.results.length);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('includes LikeC4 sources in the validation revision', async () => {
+  const root = await fixture();
+  try {
+    const store = createArchitectureStore({ context: context(root) });
+    const before = await store.read();
+    await writeFile(path.join(root, 'architecture', 'model.c4'), `${await readFile(path.join(root, 'architecture', 'model.c4'), 'utf8')}\n// validation revision mutation\n`);
+    const after = await store.read();
+    assert.notEqual(after.revision, before.revision);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('reports canonical LikeC4 failures instead of returning green metadata checks', async () => {
+  const root = await fixture();
+  try {
+    const filename = path.join(root, 'architecture', 'model.c4');
+    await writeFile(filename, (await readFile(filename, 'utf8')).replace('resonanceRuntime.host.telemetry', 'resonanceRuntime.host.missing'));
+    const store = createArchitectureStore({ context: context(root) });
+    const validation = await validateArchitecture(context(root), await store.read(), { likec4: store.likec4 });
+    const canonical = validation.results.find((result) => result.ruleId === 'canonical-likec4-model');
+    assert.equal(canonical?.status, 'fail');
+    assert.match(canonical?.message || '', /Could not resolve reference/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('does not treat a package with no inspectable contributions as a namespacing pass', async () => {
+  const root = await fixture();
+  try {
+    await writeFile(path.join(root, '.resonance', 'config.json'), JSON.stringify({ version: 1, packages: { empty: { module: 'src/config.ts' } } }));
+    const store = createArchitectureStore({ context: context(root) });
+    const validation = await validateArchitecture(context(root), await store.read(), { likec4: store.likec4 });
+    const routes = validation.results.find((result) => result.ruleId === 'namespaced-package-contributions');
+    assert.equal(routes?.status, 'unknown');
+    assert.match(routes?.message || '', /No concrete route or asset contribution/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('dispatches the Shell rule to its own checker and rejects unknown checker names', async () => {
+  const root = await fixture();
+  try {
+    await writeFile(path.join(root, '.resonance', 'config.json'), JSON.stringify({ version: 1, packages: { shell: { module: 'src/packages/shell/index.ts', enabled: false } } }));
+    const store = createArchitectureStore({ context: context(root) });
+    const artifacts = await store.read();
+    const shellValidation = await validateArchitecture(context(root), artifacts, { likec4: store.likec4 });
+    assert.equal(shellValidation.results.find((result) => result.ruleId === 'shell-is-required')?.status, 'fail');
+    await writeFile(path.join(root, '.resonance', 'config.json'), JSON.stringify({ version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, unmodeled: { module: 'src/config.ts' } } }));
+    const ownershipValidation = await validateArchitecture(context(root), await store.read(), { likec4: store.likec4 });
+    assert.match(ownershipValidation.results.find((result) => result.ruleId === 'package-ownership')?.message || '', /unmodeled is configured/);
+    const unknownRules = { ...artifacts.rules, rules: [{ ...artifacts.rules.rules[0], id: 'unknown-check', checker: 'missing-checker' }] };
+    const unknownValidation = await validateArchitecture(context(root), { ...artifacts, rules: unknownRules as typeof artifacts.rules }, { likec4: store.likec4 });
+    assert.equal(unknownValidation.results.find((result) => result.ruleId === 'unknown-check')?.status, 'fail');
+    assert.match(unknownValidation.results.find((result) => result.ruleId === 'unknown-check')?.message || '', /No checker is registered/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

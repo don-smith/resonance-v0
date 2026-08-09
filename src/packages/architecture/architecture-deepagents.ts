@@ -363,7 +363,7 @@ export function createArchitectureTools(options: ArchitectureAgentRuntimeFactory
     tool(async () => {
       try {
         const artifacts = await options.store.read();
-        return JSON.stringify(await validateArchitecture(options.context, artifacts));
+        return JSON.stringify(await validateArchitecture(options.context, artifacts, { likec4: options.store.likec4 }));
       } catch (error) { return recoverableArchitectureToolError(error, 'validate_architecture'); }
     }, { name: 'validate_architecture', description: 'Run deterministic local architecture validation. Artifact errors are returned as recoverable context.', schema: z.object({}) }),
     tool(async ({ id }) => {

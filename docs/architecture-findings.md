@@ -111,7 +111,7 @@ Telemetry is created by the registry and injected into all packages via `HostCon
   - `POST /api/architecture/edit` — applies edits to model/views/rules/patterns/decisions (with confirmation for structural changes)
 - **Internal modules**:
   - `architecture-store.ts` — reads/writes the LikeC4 model from the repository; handles stale-write detection (409 on revision mismatch)
-  - `architecture-checkers.ts` — runs validation rules (6 rules defined in model: authoritative config, shell-required, package-ownership, namespacing, evidence containment, git revision)
+  - `architecture-checkers.ts` — runs the canonical LikeC4 gate plus 6 authored validation rules through an explicit checker registry
   - `architecture-agent.ts` — agent session management
   - `architecture-deepagents.ts` — LLM runtime factory (OpenAI/OpenRouter)
   - `architecture-likec4.tsx` — LikeC4 React integration
@@ -224,11 +224,11 @@ The server composes everything:
 
 ## Architecture Validation Rules
 
-The Architecture package runs 6 deterministic rules against the LikeC4 model:
+The Architecture package runs one canonical LikeC4 model gate plus 6 deterministic authored rules. See [`docs/architecture-verification.md`](architecture-verification.md) for the current verification contract. The authored rules cover:
 
 1. **Authoritative package configuration** — repository uses an explicit version 1 package allowlist
-2. **Shell is required** — the Shell package must be present in the manifest
-3. **Package ownership** — all modeled packages have explicit manifest ownership
-4. **Namespaced package contributions** — routes and assets use package namespaces
-5. **Repository evidence contained** — all modeled evidence paths remain within the viewed repository
+2. **Shell is required** — the Shell package must be present and enabled in the manifest
+3. **Package ownership** — modeled packages match manifest modules and enabled configured packages are modeled
+4. **Namespaced package contributions** — positively inspected routes and assets use package namespaces
+5. **Repository evidence contained** — canonical LikeC4 links and source bindings remain within the repository
 6. **Reviews identify a Git revision** — a Git revision source is available for architecture reports

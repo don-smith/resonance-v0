@@ -745,6 +745,11 @@ model {
     description "Pluggable packages that extend the workspace with domain-specific capabilities. Packages register through the Runtime host and may read repository sources or make LLM calls."
 
     shell = container "Shell" {
+      metadata {
+        source "src/packages/shell/index.ts"
+        symbol "shellPackage"
+        declaration_kind "package"
+      }
       description "Owns the browser frame, navigation, mounts, and bootstrap."
       technology "TypeScript"
       link ./src/packages/shell/index.ts "Source"
@@ -803,6 +808,11 @@ model {
     }
 
     home = container "Home" {
+      metadata {
+        source "src/packages/home/index.ts"
+        symbol "homePackage"
+        declaration_kind "package"
+      }
       description "Renders the configured repository landing source."
       technology "TypeScript"
       link ./src/packages/home/index.ts "Source"
@@ -866,6 +876,11 @@ model {
     }
 
     docs = container "Docs" {
+      metadata {
+        source "src/packages/docs/index.ts"
+        symbol "docsPackage"
+        declaration_kind "package"
+      }
       description "Discovers and renders repository Markdown documents."
       technology "TypeScript"
       link ./src/packages/docs/index.ts "Source"
@@ -960,6 +975,11 @@ model {
     }
 
     backlog = container "Backlog" {
+      metadata {
+        source "src/packages/backlog/index.ts"
+        symbol "backlogPackage"
+        declaration_kind "package"
+      }
       description "Owns the canonical backlog projection and constrained backlog agent."
       technology "TypeScript"
       link ./src/packages/backlog/index.ts "Source"
@@ -1244,6 +1264,11 @@ model {
     }
 
     architecture = container "Architecture" {
+      metadata {
+        source "src/packages/architecture/index.ts"
+        symbol "architecturePackage"
+        declaration_kind "package"
+      }
       description "Projects LikeC4 architecture sources and runs bounded validation."
       technology "TypeScript + LikeC4"
       link ./src/packages/architecture/index.ts "Source"
@@ -1619,11 +1644,36 @@ model {
   resonanceRuntime.member -> targetRepository "Reads member configuration from"
   resonanceRuntime.content -> targetRepository "Reads Markdown sources from"
 
-  resonancePackages.shell -> resonanceRuntime.host "Registers through"
-  resonancePackages.home -> resonanceRuntime.host "Registers through"
-  resonancePackages.docs -> resonanceRuntime.host "Registers through"
-  resonancePackages.backlog -> resonanceRuntime.host "Registers through"
-  resonancePackages.architecture -> resonanceRuntime.host "Uses package-safe host capabilities"
+  resonancePackages.shell -> resonanceRuntime.host "Registers through" {
+    metadata {
+      verification "runtime-registration"
+      required true
+    }
+  }
+  resonancePackages.home -> resonanceRuntime.host "Registers through" {
+    metadata {
+      verification "runtime-registration"
+      required true
+    }
+  }
+  resonancePackages.docs -> resonanceRuntime.host "Registers through" {
+    metadata {
+      verification "runtime-registration"
+      required true
+    }
+  }
+  resonancePackages.backlog -> resonanceRuntime.host "Registers through" {
+    metadata {
+      verification "runtime-registration"
+      required true
+    }
+  }
+  resonancePackages.architecture -> resonanceRuntime.host "Uses package-safe host capabilities" {
+    metadata {
+      verification "runtime-registration"
+      required true
+    }
+  }
 
   resonancePackages.home -> targetRepository "Reads landing source"
   resonancePackages.docs -> targetRepository "Reads Markdown"

@@ -21,7 +21,7 @@ Add this explicit entry to the viewed repository's `.resonance/config.json`:
 
 LikeC4 `.c4` and `.likec4` files under `artifactRoot` are the canonical architecture model and view language. The package parses them with `LikeC4.fromWorkspace()`, validates the source, computes layouts, and passes the resulting model dump to `@likec4/diagram` for rendering. `rules.json`, `patterns.json`, and `decisions.json` remain package-owned metadata for validation and architectural context; the legacy JSON model/view projections are retained only for that metadata and migration compatibility.
 
-The initial model is intentionally small and hand-authored. `docs/architecture.md` remains explanatory documentation rather than validation input.
+The initial model is intentionally small and hand-authored. `docs/architecture.md` remains explanatory documentation rather than validation input. The validation contract and current finding semantics are documented in [`docs/architecture-verification.md`](../../../docs/architecture-verification.md).
 
 ## What is standard and what is custom?
 
@@ -42,7 +42,7 @@ Patterns and decisions are therefore useful architectural context today, but the
 1. The manifest loads the package and supplies its narrow `artifactRoot`.
 2. `createArchitectureStore()` resolves every artifact through `HostContext`, checks repository containment, parses the JSON documents, and reads LikeC4 sources beneath the artifact root.
 3. The model and graph routes return the validated LikeC4 dump, its views, or one projected graph. The browser renders that dump with `@likec4/diagram`; it does not render repository-authored HTML or SVG.
-4. The validation route reads the JSON artifacts and calls `validateArchitecture()`. The validator evaluates each rule in order and returns `pass`, `fail`, or `unknown` with a message, checker name, severity, and evidence paths. Results do not block server startup.
+4. The validation route parses and lays out the canonical LikeC4 sources, then calls `validateArchitecture()` with the same snapshot loader. The validator evaluates the canonical-model gate and each rule in order and returns `pass`, `fail`, or `unknown` with a message, checker name, severity, and evidence paths. Results also include summary counts and source-binding/relationship coverage. Results do not block server startup.
 5. Evidence routes expose only files explicitly linked from the model, patterns, or decisions, with bounded content and repository containment.
 6. The optional Architecture agent reads the model, views, rules, patterns, decisions, evidence, and validation results through package-owned tools. Tool and artifact failures are returned as recoverable context instead of aborting the model turn, so the agent can inspect and repair the relevant artifact or explain the problem to the user. It also receives a repository-root virtual filesystem with `ls`, `read_file`, `glob`, and `grep` operations, so assessments can inspect implementation and documentation beyond explicitly linked evidence. `write_file` and `edit_file` are allowed for the configured architecture artifact root and Markdown documents anywhere in the repository; implementation files remain read-only. Credential files such as `.env` files and repository-local agent credential files are intentionally unavailable, as are `.git` writes, shell execution, and network access.
 
@@ -58,12 +58,12 @@ The six initial rules are mostly workspace and package-boundary invariants rathe
 
 - **Authoritative package configuration** — `.resonance/config.json` is a version 1 manifest with a package allowlist.
 - **Shell is required** — Shell is present and enabled in that manifest.
-- **Configured package ownership** — every modeled package has a matching manifest entry and expected module path.
+- **Configured package ownership** — every modeled package has a matching manifest entry and expected module path, and every enabled configured package is modeled.
 - **Namespaced package contributions** — package routes and assets use their package namespace.
 - **Repository evidence is contained** — linked evidence paths pass through the host's repository-path boundary.
 - **Reviews identify a Git revision** — `.git/HEAD` is available for review context.
 
-A rule's `description`, `appliesTo`, and `severity` document intent and reporting. The executable behavior comes from its `checker`; `constraints` are reserved schema data and are not interpreted by the current checkers. Unknown means the checker could not establish the fact, not that the architecture failed.
+A rule's `description`, `appliesTo`, and `severity` document intent and reporting. The executable behavior comes from its `checker`, which is resolved through the explicit registry in `architecture-checkers.ts`; `constraints` are reserved schema data and are not interpreted by the current checkers. Unknown means the checker could not establish the fact, not that the architecture failed. See [`docs/architecture-verification.md`](../../../docs/architecture-verification.md) for the complete verification contract.
 
 This explains why the current validation screen does not yet show checks such as “every package uses the package contract,” “this dependency direction is allowed,” or “this pattern is implemented.” Those are the next layer of architecture validation: they require patterns or rules to become explicit, executable assertions over the LikeC4 model and implementation evidence rather than remaining descriptive JSON.
 

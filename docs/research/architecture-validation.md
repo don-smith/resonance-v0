@@ -1,5 +1,7 @@
 # Architecture validation: connecting the model to code
 
+> **Implementation update:** The initial trust-repair slice is now in place. Validation includes the canonical LikeC4 parse/layout gate, hashes all LikeC4 sources, uses the explicit checker registry, reads package ownership and containment from the canonical model, requires positive contribution evidence, and reports binding coverage. The observed TypeScript dependency graph and relationship-level comparison described below remain future work.
+
 ## Question
 
 How should Resonance turn its C4 model into a trustworthy, low-maintenance notification system for unexpected architectural change, while retaining deterministic evidence and using an agent only where static analysis cannot establish the answer?

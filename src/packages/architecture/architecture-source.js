@@ -175,18 +175,18 @@ export default function createArchitecture({ fetchFn = fetch, eventSourceFactory
     notice.append(element('h2', 'Architecture model unavailable'), element('p', error?.message || String(error)), element('p', 'Use the Architecture agent to inspect and repair the LikeC4 source, then reload this view.'));
     panel.append(notice);
   }
-  function renderValidationResults(panel, results) { panel.textContent = ''; const list = element('ul'); for (const result of results) { const item = element('li', undefined, { class: `validation-${result.status}` }); item.append(element('strong', result.status.toUpperCase()), element('span', ` ${result.name}: ${result.message}`)); list.append(item); } panel.append(list); }
+  function renderValidationResults(panel, results, report = null) { panel.textContent = ''; if (report?.summary) panel.append(element('p', `${report.summary.pass} passed · ${report.summary.fail} failed · ${report.summary.unknown} unknown`, { class: 'architecture-validation-summary' })); if (report?.coverage) { const { elements, relationships } = report.coverage; panel.append(element('p', `Coverage: ${elements.bound}/${elements.total} elements bound · ${relationships.verified}/${relationships.total} relationships verified`, { class: 'architecture-validation-coverage' })); } const list = element('ul'); for (const result of results) { const item = element('li', undefined, { class: `validation-${result.status}` }); item.append(element('strong', result.status.toUpperCase()), element('span', ` ${result.name}: ${result.message}`)); list.append(item); } panel.append(list); }
   function renderValidation() {
     if (diagramRenderer) { diagramRenderer.unmount(); diagramRenderer = null; }
     const panel = root.querySelector('.architecture-graph'); panel.textContent = '';
     const view = element('section', undefined, { class: 'architecture-validation-view' });
     const toolbar = element('div', undefined, { class: 'architecture-validation-toolbar' }); validationButton = element('button', 'Run validation', { type: 'button', class: 'architecture-validation-button' }); toolbar.append(validationButton); view.append(toolbar);
-    const results = element('div', undefined, { class: 'architecture-validation', 'aria-live': 'polite' }); if (validationResults) renderValidationResults(results, validationResults); else results.append(element('p', 'Run validation to evaluate the current architecture model against its authored rules.')); view.append(results); panel.append(view);
+    const results = element('div', undefined, { class: 'architecture-validation', 'aria-live': 'polite' }); if (validationResults) renderValidationResults(results, validationResults.results, validationResults); else results.append(element('p', 'Run validation to evaluate the current architecture model against its authored rules.'));  view.append(results); panel.append(view);
     validationButton.addEventListener('click', () => { void runValidation(); });
   }
   async function runValidation() {
     const button = validationButton; button.disabled = true;
-    try { validationResults = (await json('/api/architecture/validation')).results; if (activeView === 'validation') renderValidation(); }
+    try { validationResults = await json('/api/architecture/validation'); if (activeView === 'validation') renderValidation(); }
     catch (error) { renderGraphError(error); }
     finally { button.disabled = false; if (validationButton !== button) validationButton.disabled = false; }
   }

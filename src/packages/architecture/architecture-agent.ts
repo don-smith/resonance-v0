@@ -215,6 +215,6 @@ export function createArchitectureAgentSession({ store, context, telemetry: prov
       return snapshot();
     },
     async dispose() { await this.reset(); listeners.clear(); },
-    async runValidation() { validation = await validateArchitecture(context, await store.read()); emit({ type: 'snapshot', snapshot: snapshot() }); return validation; },
+    async runValidation() { validation = await validateArchitecture(context, await store.read(), { likec4: store.likec4 }); emit({ type: 'snapshot', snapshot: snapshot() }); return validation; },
   };
 }
