@@ -72,6 +72,7 @@ test('renders repository and runtime metadata in the Shell frame', async () => {
     const coordinator = await loadCoordinator(window, document);
     await coordinator.startApplication({ documentRoot: document, fetchFn });
     assert.equal(document.querySelector('[data-shell-repository-name]').textContent, 'fixture-app');
+    assert.equal(document.title, 'fixture-app resonance');
     assert.equal(document.querySelector('[data-shell-home]').disabled, true);
     assert.equal(document.querySelector('[data-shell-repository-version]').textContent, 'v2.4.0');
     assert.equal(document.querySelector('[data-shell-repository-tagline]').textContent, 'A fixture application.');

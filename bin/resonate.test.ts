@@ -20,7 +20,7 @@ test('the CLI help does not expose retired product terminology', async () => {
 
 test('opens the browser at the actual server port after startup', async () => {
   const logs = []; const openedUrls = []; const fakeServer = { address: () => ({ port: 4318 }) };
-  await run(['--port', '4317'], { root: '/tmp/example-repository', isInstalledFn: async () => true, startServerFn: async (options) => { assert.equal(options.root, '/tmp/example-repository'); assert.equal(options.port, 4317); assert.equal(options.config.version, 1); assert.equal(options.registry, undefined); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: (message) => logs.push(message) });
+  await run(['--port', '4317'], { root: '/tmp/example-repository', isInstalledFn: async () => true, loadConfigFn: async () => ({ version: 1, packages: {} }), startServerFn: async (options) => { assert.equal(options.root, '/tmp/example-repository'); assert.equal(options.port, 4317); assert.equal(options.config.version, 1); assert.equal(options.registry, undefined); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: (message) => logs.push(message) });
   assert.deepEqual(openedUrls, ['http://127.0.0.1:4318']); assert.ok(logs.includes('http://127.0.0.1:4318'));
 });
 
@@ -37,11 +37,16 @@ test('first-run approval installs selected packages before starting', async () =
   const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); assert.equal(config.packages.home.source, 'README.md'); assert.equal(config.repository.name, path.basename(root)); assert.equal(config.repository.tagline, '');
 });
 
+test('startup scaffolds artifacts for configured Architecture and Backlog packages', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); const fakeServer = { address: () => ({ port: 4317 }) };
+  await run([], { root, isInstalledFn: async () => true, loadConfigFn: async () => ({ version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' }, architecture: { module: 'src/packages/architecture/index.ts' }, backlog: { module: 'src/packages/backlog/index.ts' } } }), startServerFn: async () => { assert.match(await readFile(path.join(root, 'architecture/model.c4'), 'utf8'), /view systemContext/); assert.match(await readFile(path.join(root, 'backlog/todo.yaml'), 'utf8'), /title: Establish the backlog/); return fakeServer; }, openBrowserFn: () => {}, log: () => {} });
+});
+
 test('install subcommand creates Shell and selected optional packages only', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); let started = false;
-  const result = await run(['install'], { root, selectPackagesFn: async () => ({ home: false, documentation: true }), startServerFn: async () => { started = true; return null; }, log: () => {} });
+  const result = await run(['install'], { root, selectPackagesFn: async () => ({ home: false, documentation: true, architecture: true, backlog: true, doctor: true }), startServerFn: async () => { started = true; return null; }, log: () => {} });
   assert.equal(result, null); assert.equal(started, false);
-  const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'documentation']); assert.deepEqual(config.packages.documentation.ignoredDirectories, ['.git', 'node_modules']);
+  const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'documentation', 'architecture', 'backlog', 'doctor']); assert.deepEqual(config.packages.documentation.ignoredDirectories, ['.git', 'node_modules']); assert.equal(config.packages.architecture.module, 'src/packages/architecture/index.ts'); assert.equal(config.packages.backlog.module, 'src/packages/backlog/index.ts'); assert.equal(config.packages.doctor.module, 'src/packages/doctor/index.ts'); assert.match(await readFile(path.join(root, 'backlog/todo.yaml'), 'utf8'), /title: Establish the backlog/); assert.match(await readFile(path.join(root, 'backlog/plans/establish-backlog.md'), 'utf8'), /^# Establish the backlog/m); assert.deepEqual(JSON.parse(await readFile(path.join(root, 'architecture/model.json'), 'utf8')), { version: 1, entities: [], relationships: [] }); assert.match(await readFile(path.join(root, 'architecture/model.c4'), 'utf8'), /view systemContext/);
 });
 
 test('install subcommand preserves an existing repository configuration', async () => {
@@ -98,11 +103,11 @@ test('interactive member package selection completes on Enter and cancels on con
   }
 });
 
-test('non-interactive package selection accepts Home and Documentation answers', async () => {
+test('non-interactive package selection accepts all optional package answers', async () => {
   const input = new EventEmitter(); input.isTTY = false; const output = new Writable({ write(_chunk, _encoding, callback) { callback(); } });
   const selection = selectOptionalPackages({ input, output });
-  input.emit('data', 'y\nn\n'); input.emit('end');
-  assert.deepEqual(await selection, { home: true, documentation: false });
+  input.emit('data', 'y\nn\ny\ny\ny\n'); input.emit('end');
+  assert.deepEqual(await selection, { home: true, documentation: false, architecture: true, backlog: true, doctor: true });
 });
 
 test('interactive package selection exits on Escape and restores terminal input', async () => {
@@ -116,7 +121,7 @@ test('interactive package selection handles arrows, space, and Enter', async () 
   const input = new EventEmitter(); input.isTTY = true; input.rawMode = false; input.setRawMode = (value) => { input.rawMode = value; }; const output = new Writable({ write(_chunk, _encoding, callback) { callback(); } }); output.isTTY = true;
   const selection = selectOptionalPackages({ input, output });
   input.emit('data', '\x1b[B \r');
-  assert.deepEqual(await selection, { home: false, documentation: true }); assert.equal(input.rawMode, false);
+  assert.deepEqual(await selection, { home: false, documentation: true, architecture: false, backlog: false, doctor: false }); assert.equal(input.rawMode, false);
 });
 
 test('interactive package selection treats Ctrl+C and Ctrl+D as cancellation', async () => {

@@ -28,7 +28,7 @@ cd /path/to/another/repository
 resonate
 ```
 
-The command reads `.resonance/config.json` from the current repository. If it is absent, Resonance reports that the repository is not installed and asks whether to install it. Approval runs the same setup as `resonate install`: Shell is always installed, while Home and Documentation can be selected interactively. Existing config files are authoritative: omitted packages are not imported or registered. Member packages are never added by team installation. Select them from an external member repository with `resonate member install /path/to/member-packages`; the ignored `.resonance/member-config.json` selects them for the current repository. The server starts at port 4317, moves to the next available port if needed, and opens the selected URL.
+The command reads `.resonance/config.json` from the current repository. If it is absent, Resonance reports that the repository is not installed and asks whether to install it. Approval runs the same setup as `resonate install`: Shell is always installed, while Home, Documentation, Architecture, Backlog, and Doctor can be selected interactively. Selecting Architecture or Backlog creates minimal starter repository artifacts when they are missing; existing artifacts are never overwritten. Existing config files are authoritative: omitted packages are not imported or registered. Member packages are never added by team installation. Select them from an external member repository with `resonate member install /path/to/member-packages`; the ignored `.resonance/member-config.json` selects them for the current repository. The server starts at port 4317, moves to the next available port if needed, and opens the selected URL.
 
 ## Telemetry
 
@@ -50,7 +50,18 @@ Use `resonate install` to create `.resonance/config.json`. Installation records 
       "extensions": [".md", ".markdown"],
       "ignoredDirectories": [".git", "node_modules"]
     },
-    "backlog": { "module": "src/packages/backlog/index.ts" }
+    "architecture": {
+      "module": "src/packages/architecture/index.ts",
+      "artifactRoot": "architecture",
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-flash"
+    },
+    "backlog": {
+      "module": "src/packages/backlog/index.ts",
+      "provider": "openrouter",
+      "model": "deepseek/deepseek-v4-flash"
+    },
+    "doctor": { "module": "src/packages/doctor/index.ts" }
   }
 }
 ```

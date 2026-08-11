@@ -11,6 +11,7 @@ import { startServer } from '../src/server.ts';
 import { createPackageScaffold, planPackageScaffold } from '../src/package-scaffold.ts';
 import { loadMemberManifest, resolveMemberRepository, writeMemberConfig } from '../src/member.ts';
 import { createMemberPackageScaffold, createMemberRepository, planMemberPackageScaffold, planMemberRepository } from '../src/member-scaffold.ts';
+import { scaffoldRepositoryPackages } from '../src/repository-scaffold.ts';
 
 const applicationRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -110,7 +111,13 @@ export async function askToInstall({ input = process.stdin, output = process.std
   finally { prompt.close(); input.resume?.(); }
 }
 
-const OPTIONAL_PACKAGES = [{ id: 'home', label: 'Home (README.md)' }, { id: 'documentation', label: 'Documentation' }];
+const OPTIONAL_PACKAGES = [
+  { id: 'home', label: 'Home (README.md)' },
+  { id: 'documentation', label: 'Documentation' },
+  { id: 'architecture', label: 'Architecture' },
+  { id: 'backlog', label: 'Backlog' },
+  { id: 'doctor', label: 'Doctor' },
+];
 
 export async function selectMemberPackages({ manifest, input = process.stdin, output = process.stdout } = {}) {
   const packages = Object.entries(manifest.packages).map(([id, value]) => ({ id, label: value.label || id }));
@@ -136,17 +143,18 @@ export async function selectOptionalPackages({ input = process.stdin, output = p
   output.write('Shell package is required and will always be installed.\n');
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== 'function') {
     const reader = createInputLineReader(input);
-    output.write('Install Home package? [y/N] ');
+    const selected = {};
     try {
-      const home = /^(y|yes)$/i.test((await reader.next()).trim());
-      output.write('Install Documentation package? [y/N] ');
-      const documentation = /^(y|yes)$/i.test((await reader.next()).trim());
-      return { home, documentation };
+      for (const item of OPTIONAL_PACKAGES) {
+        output.write(`Install ${item.label} package? [y/N] `);
+        selected[item.id] = /^(y|yes)$/i.test((await reader.next()).trim());
+      }
+      return selected;
     } finally { reader.close(); }
   }
 
   return new Promise((resolve) => {
-    let cursor = 0; const selected = { home: false, documentation: false }; let rendered = false; let inputBuffer = '';
+    let cursor = 0; const selected = Object.fromEntries(OPTIONAL_PACKAGES.map((item) => [item.id, false])); let rendered = false; let inputBuffer = '';
     const render = () => {
       if (rendered) moveCursor(output, 0, -OPTIONAL_PACKAGES.length);
       for (const line of checkboxLines(cursor, selected)) { cursorTo(output, 0); clearLine(output, 0); output.write(line); output.write('\n'); }
@@ -184,6 +192,7 @@ export async function installRepository(root, { selectPackagesFn = selectOptiona
   }
   const selection = await selectPackagesFn();
   if (!selection) { log('Installation cancelled.'); return null; }
+  await scaffoldRepositoryPackages(root, selection);
   const config = await writeRepositoryConfig(root, createRepositoryConfig({ ...selection, root }));
   log(`Resonance installed in ${root}.`);
   return config;
@@ -245,6 +254,7 @@ export async function run(argumentsList, { root = process.cwd(), appRoot = appli
     if (!installed) return null;
   }
   const config = await loadConfigFn(root);
+  await scaffoldRepositoryPackages(root, config.packages);
   const { command: _command, packageId: _packageId, ...serverOptions } = options;
   const server = await startServerFn({ root, config, ...serverOptions });
   const address = server.address();

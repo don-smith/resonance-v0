@@ -73,6 +73,7 @@ function loadStylesheet(documentRoot, packageId, stylesheet) {
 function renderRepositoryMetadata(documentRoot, manifest) {
   const repository = manifest.repository || {};
   const runtime = manifest.runtime || {};
+  documentRoot.title = repository.name ? `${repository.name} resonance` : 'resonance';
   const name = documentRoot.querySelector('[data-shell-repository-name]');
   const version = documentRoot.querySelector('[data-shell-repository-version]');
   const tagline = documentRoot.querySelector('[data-shell-repository-tagline]');

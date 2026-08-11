@@ -28,6 +28,23 @@ test('builds install config with Shell and selected optional packages only', asy
   assert.deepEqual(await loadRepositoryConfig(root), config);
 });
 
+test('builds the selected Architecture, Backlog, and Doctor package entries', () => {
+  const config = createRepositoryConfig({ architecture: true, backlog: true, doctor: true });
+  assert.deepEqual(Object.keys(config.packages), ['shell', 'architecture', 'backlog', 'doctor']);
+  assert.deepEqual(config.packages.architecture, {
+    module: 'src/packages/architecture/index.ts',
+    provider: 'openrouter',
+    model: 'deepseek/deepseek-v4-flash',
+    artifactRoot: 'architecture',
+  });
+  assert.deepEqual(config.packages.backlog, {
+    module: 'src/packages/backlog/index.ts',
+    provider: 'openrouter',
+    model: 'deepseek/deepseek-v4-flash',
+  });
+  assert.deepEqual(config.packages.doctor, { module: 'src/packages/doctor/index.ts' });
+});
+
 test('default install config contains the required Shell package', () => {
   assert.deepEqual(Object.keys(defaultRepositoryConfig().packages), ['shell']);
 });
