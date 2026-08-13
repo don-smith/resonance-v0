@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -10,6 +10,8 @@ import type {
   PackageInput,
   PackageRegistration,
 } from "../../package-contract.ts";
+import { createTelemetry } from '../../telemetry.ts';
+import { createDoctorAgentSession, createDoctorDeepAgentsRuntimeFactory, type DoctorAgentCheck, type DoctorAgentRuntimeFactory } from './doctor-agent.ts';
 import {
   runBunDependencySecurity,
   runBunUnitTests,
@@ -60,7 +62,7 @@ const checkSchema = z
   })
   .strict();
 const inputSchema = z
-  .object({ checks: z.record(checkSchema).optional() })
+  .object({ provider: z.enum(["openai", "openrouter"]).default("openrouter"), model: z.string().trim().min(1).max(200).default("deepseek/deepseek-v4-flash"), checks: z.record(checkSchema).optional() })
   .strict();
 const checkDetails: Record<
   CheckId,
@@ -103,6 +105,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 export type DoctorInput = {
+  provider: "openai" | "openrouter";
+  model: string;
   checks: Partial<Record<CheckId, DoctorCheckConfig>>;
 };
 export function doctorInput(input: PackageInput): DoctorInput {
@@ -122,7 +126,7 @@ export function doctorInput(input: PackageInput): DoctorInput {
         timeoutMs: normalized.timeoutMs || 120_000,
       };
     }
-  return { checks };
+  return { provider: parsed.data.provider, model: parsed.data.model, checks };
 }
 function stateValue(value: unknown): DoctorState {
   if (
@@ -146,6 +150,23 @@ async function writeState(
   state: DoctorState,
 ): Promise<void> {
   await context.state?.write(state);
+}
+function credentialFilename(root: string): string { return path.join(root, ".resonance", "doctor-agent.env"); }
+async function readCredential(root: string): Promise<string | null> {
+  try {
+    const value = await readFile(credentialFilename(root), "utf8");
+    const match = value.match(/^OPEN(?:AI|ROUTER)_API_KEY=(.+)$/m);
+    return match?.[1]?.trim() || null;
+  } catch { return null; }
+}
+async function writeCredential(root: string, provider: "openai" | "openrouter", apiKey: string): Promise<void> {
+  if (!apiKey || apiKey.length > 4096 || /[\r\n]/.test(apiKey) || apiKey !== apiKey.trim()) throw new Error("Credential must be a single-line API key.");
+  const directory = path.dirname(credentialFilename(root));
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const filename = credentialFilename(root);
+  const temporary = path.join(directory, `.doctor-agent.${crypto.randomUUID()}.tmp`);
+  try { await writeFile(temporary, `${provider === "openai" ? "OPENAI" : "OPENROUTER"}_API_KEY=${apiKey}\n`, { encoding: "utf8", mode: 0o600 }); await rename(temporary, filename); }
+  catch (error) { await unlink(temporary).catch(() => undefined); throw error; }
 }
 async function discoverChecks(
   context: HostContext,
@@ -317,6 +338,7 @@ export function createDoctorPackage({
   runCheck = (config, options) => runBunUnitTests({ ...config, ...options }),
   runDependencyCheck = (config, options) =>
     runBunDependencySecurity({ ...config, ...options }),
+  runtimeFactory,
 }: {
   runCheck?: (
     config: DoctorCheckConfig,
@@ -326,11 +348,15 @@ export function createDoctorPackage({
     config: DoctorCheckConfig,
     options: DoctorRunOptions,
   ) => Promise<DoctorResult>;
+  runtimeFactory?: DoctorAgentRuntimeFactory;
 } = {}): PackageDefinition {
   return {
     metadata,
     register(context, input): PackageRegistration {
       const config = doctorInput(input);
+      const telemetry = context.telemetry.child({ package: metadata.id });
+      const agent = createDoctorAgentSession({ provider: config.provider, model: config.model, telemetry, credentialProvider: () => readCredential(context.repositoryRoot), runtimeFactory: runtimeFactory || createDoctorDeepAgentsRuntimeFactory() });
+      const activeStreams = new Set<() => void>();
       let activeRun = false;
       const getChecks = async () => {
         const state = await readState(context);
@@ -340,6 +366,12 @@ export function createDoctorPackage({
           candidates,
           configs: { ...state.checks, ...config.checks },
         };
+      };
+      const agentCheck = async (id: string): Promise<DoctorAgentCheck> => {
+        const state = await readState(context);
+        const checkId = isCheckId(id) ? id : "unit-tests";
+        const check = checkDetails[checkId];
+        return { id: checkId, ...check, result: state.results[checkId] };
       };
       return {
         metadata,
@@ -374,6 +406,23 @@ export function createDoctorPackage({
                 results: (await readState(context)).results,
               }),
           },
+          { method: "GET", path: "/api/doctor/agent/state", handler: async (_request, response) => response.json(200, agent.snapshot()) },
+          { method: "GET", path: "/api/doctor/agent/events", handler: async (request, response) => {
+            const stream = response.sse(); let closed = false; let unsubscribe: (() => void) | null = null; let cleanupBeforeSubscribe = false; let resolveClosed = () => {};
+            const closedPromise = new Promise<void>((resolve) => { resolveClosed = resolve; });
+            const close = () => { if (closed) return; closed = true; if (unsubscribe) unsubscribe(); else cleanupBeforeSubscribe = true; activeStreams.delete(close); stream.close(); resolveClosed(); };
+            activeStreams.add(close); request.onAbort(close); response.onClose(close); unsubscribe = agent.subscribe((event) => { stream.write(event); if (response.closed) close(); }); if (cleanupBeforeSubscribe) unsubscribe(); await closedPromise;
+          } },
+          { method: "POST", path: "/api/doctor/agent/prompt", handler: async (request, response) => {
+            try { const body = await request.readJson<{ prompt?: unknown; selectedCheck?: unknown }>(32 * 1024); if (!isRecord(body) || typeof body.prompt !== "string" || !body.prompt.trim() || typeof body.selectedCheck !== "string") { sendError(response, new Error("prompt and selectedCheck must be non-empty strings."), 400); return; } response.json(202, await agent.submitPrompt({ prompt: body.prompt, check: await agentCheck(body.selectedCheck) })); }
+            catch (error) { sendError(response, error, error?.status || 500); }
+          } },
+          { method: "POST", path: "/api/doctor/agent/credential", handler: async (request, response) => {
+            try { const body = await request.readJson<{ apiKey?: unknown }>(8 * 1024); if (!isRecord(body) || typeof body.apiKey !== "string") { sendError(response, new Error("apiKey must be a string."), 400); return; } await writeCredential(context.repositoryRoot, config.provider, body.apiKey); response.json(200, { ok: true }); }
+            catch (error) { sendError(response, error, error?.status || 500); }
+          } },
+          { method: "POST", path: "/api/doctor/agent/stop", handler: async (_request, response) => { try { response.json(200, await agent.stop()); } catch (error) { sendError(response, error, error?.status || 500); } } },
+          { method: "POST", path: "/api/doctor/agent/reset", handler: async (_request, response) => { try { response.json(200, { state: await agent.reset() }); } catch (error) { sendError(response, error, error?.status || 500); } } },
           {
             method: "POST",
             path: "/api/doctor/configure",
@@ -530,6 +579,7 @@ export function createDoctorPackage({
           entry: "/assets/doctor/doctor.js",
           stylesheet: "/assets/doctor/doctor.css",
         },
+        dispose: async () => { [...activeStreams].forEach((close) => close()); await agent.dispose(); },
       };
     },
   };

@@ -48,3 +48,11 @@ decisions:
     plan: plans/improve-telemetry.md
     status: is-ready
     priority: P1
+  - title: Architecture review skill
+    plan: plans/architecture-review-skill.md
+    status: in-planning
+    priority: P1
+  - title: Architecture authoring skill
+    status: in-planning
+    priority: P1
+    plan: plans/architecture-authoring-skill.md

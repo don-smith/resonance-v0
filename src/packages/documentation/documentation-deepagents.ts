@@ -3,11 +3,19 @@ import { createDeepAgent } from 'deepagents';
 import { ChatOpenAI } from '@langchain/openai';
 import { tool } from 'langchain';
 import { z } from 'zod/v4';
-import type { DocumentationAgentRuntime, DocumentationAgentRuntimeFactory, DocumentationAgentRuntimeFactoryOptions, DocumentationAgentTurn, DocumentationAgentUpdate } from './documentation-agent.ts';
+import { modelContextWindow } from '../../model-profiles.ts';
+import type { DocumentationAgentContext, DocumentationAgentRuntime, DocumentationAgentRuntimeFactory, DocumentationAgentRuntimeFactoryOptions, DocumentationAgentTurn, DocumentationAgentUpdate } from './documentation-agent.ts';
 import { readDocumentationDocument, writeDocumentationDocument } from './documentation-agent.ts';
 
 const documentationSystemPrompt = 'You are Resonance Documentation Agent. Help the user improve repository Markdown. The active document and any highlighted passage are supplied with each request. Read the active document before editing it. Use the document tools to make requested changes, and explain what you changed. Do not claim a change was made unless a document tool reports success.';
 const maxEditBytes = 512 * 1024;
+
+function inputTokensOf(chunk: unknown): number | null {
+  if (!chunk || typeof chunk !== 'object') return null;
+  const message = chunk as { usage_metadata?: { input_tokens?: unknown }; response_metadata?: { usage?: { prompt_tokens?: unknown } } };
+  const inputTokens = message.usage_metadata?.input_tokens ?? message.response_metadata?.usage?.prompt_tokens;
+  return typeof inputTokens === 'number' && Number.isFinite(inputTokens) ? inputTokens : null;
+}
 
 function textOf(chunk: unknown): string {
   if (!chunk || typeof chunk !== 'object') return '';
@@ -47,7 +55,7 @@ function activeContext(turn: DocumentationAgentTurn): string {
 }
 
 export class DocumentationDeepAgentsRuntime implements DocumentationAgentRuntime {
-  constructor(private readonly agent: any, private readonly telemetry: DocumentationAgentRuntimeFactoryOptions['telemetry']) {}
+  constructor(private readonly agent: any, private readonly telemetry: DocumentationAgentRuntimeFactoryOptions['telemetry'], private readonly maxInputTokens?: number) {}
   async *stream(turn: DocumentationAgentTurn, signal: AbortSignal): AsyncIterable<DocumentationAgentUpdate> {
     const messages = turn.messages.map((message, index) => ({ role: message.role, content: message.role === 'user' && index === turn.messages.length - 1 ? `${activeContext(turn)}\n\n<user-request>\n${message.content}\n</user-request>` : message.content }));
     const streamSpan = this.telemetry.span('documentation.model.stream', { observationType: 'generation', input: [{ role: 'system', content: documentationSystemPrompt }, ...messages] });
@@ -58,6 +66,8 @@ export class DocumentationDeepAgentsRuntime implements DocumentationAgentRuntime
       for await (const value of stream) {
         const [chunk, metadata] = value as [unknown, { langgraph_node?: unknown }];
         if (metadata?.langgraph_node !== 'model' && metadata?.langgraph_node !== 'model_request') continue;
+        const inputTokens = inputTokensOf(chunk);
+        if (inputTokens !== null && this.maxInputTokens !== undefined) yield { kind: 'context', context: { inputTokens, maxInputTokens: this.maxInputTokens } as DocumentationAgentContext };
         const text = textOf(chunk);
         if (!text) continue;
         chunks += 1;
@@ -78,12 +88,13 @@ export function createDocumentationDeepAgentsRuntimeFactory({ provider, model }:
   return async (options) => {
     const skill = await readFile(new URL('./skills/edit-documentation/SKILL.md', import.meta.url), 'utf8');
     const runtimeTelemetry = options.telemetry.child({ provider, model });
+    const chatModel = new ChatOpenAI({ model, apiKey: options.apiKey, temperature: 0, configuration: provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {} });
     const agent = createDeepAgent({
-      model: new ChatOpenAI({ model, apiKey: options.apiKey, temperature: 0, configuration: provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {} }),
+      model: chatModel,
       tools: documentTools(options),
       checkpointer: false,
       systemPrompt: `${documentationSystemPrompt} Read and follow this guidance before acting:\n${skill}`,
     });
-    return new DocumentationDeepAgentsRuntime(agent, runtimeTelemetry);
+    return new DocumentationDeepAgentsRuntime(agent, runtimeTelemetry, chatModel.profile.maxInputTokens ?? modelContextWindow(model));
   };
 }

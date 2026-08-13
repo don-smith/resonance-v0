@@ -127,7 +127,7 @@ test('exposes lazy agent state, bounded agent routes, and non-secret credential 
     await writeFile(path.join(root, 'backlog', 'plans', 'queue.md'), '# Queue');
     await withServer(async (base) => {
       const state = await fetch(`${base}/api/backlog/agent/state`).then((response) => response.json());
-      assert.deepEqual(state, { messages: [], status: 'idle', hasSession: false, error: null, pendingDeletion: null });
+      assert.deepEqual(state, { messages: [], status: 'idle', hasSession: false, error: null, pendingDeletion: null, context: null });
       const missing = await fetch(`${base}/api/backlog/agent/prompt`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'Review', selectedPath: 'backlog/plans/queue.md' }) });
       assert.equal(missing.status, 202); assert.deepEqual(await missing.json(), { accepted: false, credentialRequired: true });
       const key = await fetch(`${base}/api/backlog/agent/credential`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'sk-local-secret' }) });
@@ -298,6 +298,8 @@ test('retains user and agent messages across sequential transcript events', asyn
     { id: 'agent-1', role: 'assistant', content: 'First response' },
   ];
   emit({ type: 'snapshot', snapshot: { messages: [], status: 'idle', error: null, pendingDeletion: null } });
+  emit({ type: 'context', context: { inputTokens: 42876, maxInputTokens: 1048576 } });
+  assert.equal(root.querySelector('.backlog-context')?.textContent, '42k / 1M');
   emit({ type: 'message', message: messages[0] });
   emit({ type: 'message', message: messages[1] });
   emit({ type: 'snapshot', snapshot: { messages: [messages[0]], status: 'idle', error: null, pendingDeletion: null } });
@@ -339,6 +341,10 @@ test('opens the agent stream only while active and submits the selected canonica
   assert.deepEqual([...root.querySelectorAll('.backlog-composer-actions button')].map((button) => button.textContent), ['Send', 'New Chat']);
   await instance.activate(); assert.equal(streams.length, 1); assert.equal(streams[0].url, '/api/backlog/agent/events');
   streams[0].onmessage({ data: JSON.stringify({ type: 'snapshot', snapshot: { messages: [], status: 'idle', error: null, pendingDeletion: null } }) });
+  streams[0].onmessage({ data: JSON.stringify({ type: 'status', status: 'working' }) });
+  assert.equal(root.querySelector('.backlog-send').textContent, 'Stop');
+  assert.equal(root.querySelector('.backlog-send').classList.contains('resonance-agent-stop'), true);
+  streams[0].onmessage({ data: JSON.stringify({ type: 'status', status: 'idle' }) });
   const input: any = root.querySelector('.backlog-composer textarea'); input.value = 'Review this'; input.dispatchEvent(new document.defaultView.Event('input')); await new Promise((resolve) => setTimeout(resolve, 0)); root.querySelector('.backlog-composer').dispatchEvent(new document.defaultView.Event('submit', { bubbles: true, cancelable: true })); await new Promise((resolve) => setTimeout(resolve, 0));
   const prompt = requests.find((request) => request.url === '/api/backlog/agent/prompt'); assert.deepEqual(JSON.parse(prompt.options.body), { prompt: 'Review this', selectedPath: items[0].path });
   instance.deactivate(); assert.equal(streams[0].closed, true);

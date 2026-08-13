@@ -8,15 +8,17 @@ export type DocumentationAgentStatus = 'idle' | 'working' | 'error';
 export type DocumentationAgentMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string };
 export type DocumentationAgentDocument = { path: string; content: string };
 export type DocumentationAgentTurn = { messages: readonly DocumentationAgentMessage[]; document: DocumentationAgentDocument; selectedText?: string; threadId: string };
-export type DocumentationAgentUpdate = { kind: 'assistant'; text: string };
+export type DocumentationAgentContext = { inputTokens: number; maxInputTokens: number };
+export type DocumentationAgentUpdate = { kind: 'assistant'; text: string } | { kind: 'context'; context: DocumentationAgentContext };
 export type DocumentationAgentRuntime = { stream(turn: DocumentationAgentTurn, signal: AbortSignal): AsyncIterable<DocumentationAgentUpdate>; dispose(): Promise<void> };
 export type DocumentationAgentRuntimeFactoryOptions = { apiKey: string; context: HostContext; options: DocumentationOptions; telemetry: Telemetry; onMutation(paths: string[]): void };
 export type DocumentationAgentRuntimeFactory = (options: DocumentationAgentRuntimeFactoryOptions) => Promise<DocumentationAgentRuntime>;
-export type DocumentationAgentSnapshot = { messages: DocumentationAgentMessage[]; status: DocumentationAgentStatus; hasSession: boolean; error: string | null };
+export type DocumentationAgentSnapshot = { messages: DocumentationAgentMessage[]; status: DocumentationAgentStatus; hasSession: boolean; error: string | null; context: DocumentationAgentContext | null };
 export type DocumentationAgentEvent =
   | { type: 'snapshot'; snapshot: DocumentationAgentSnapshot }
   | { type: 'message'; message: DocumentationAgentMessage }
   | { type: 'status'; status: DocumentationAgentStatus }
+  | { type: 'context'; context: DocumentationAgentContext }
   | { type: 'error'; message: string }
   | { type: 'credential-required' }
   | { type: 'mutation-committed'; affectedPaths: string[] }
@@ -84,13 +86,14 @@ export function createDocumentationAgentSession({ context, options, credentialPr
   let status: DocumentationAgentStatus = 'idle';
   let error: string | null = null;
   let messages: DocumentationAgentMessage[] = [];
+  let contextUsage: DocumentationAgentContext | null = null;
   let generation = 0;
   let starting = false;
   let closing: Promise<void> | null = null;
   let assistantId: string | null = null;
   let activeTurn: { controller: AbortController; completion: Promise<void> } | null = null;
   const listeners = new Set<(event: DocumentationAgentEvent) => void>();
-  const snapshot = (): DocumentationAgentSnapshot => ({ messages: messages.map((message) => ({ ...message })), status, hasSession: Boolean(runtime), error });
+  const snapshot = (): DocumentationAgentSnapshot => ({ messages: messages.map((message) => ({ ...message })), status, hasSession: Boolean(runtime), error, context: contextUsage ? { ...contextUsage } : null });
   const emit = (event: DocumentationAgentEvent) => listeners.forEach((listener) => listener(event));
   const setStatus = (next: DocumentationAgentStatus) => { status = next; emit({ type: 'status', status }); };
   const close = async (current: DocumentationAgentRuntime, reportFailure = false) => {
@@ -103,7 +106,13 @@ export function createDocumentationAgentSession({ context, options, credentialPr
     } finally { if (closing === pending) closing = null; }
   };
   const onUpdate = (turn: number, update: DocumentationAgentUpdate) => {
-    if (turn !== generation || !update.text) return;
+    if (turn !== generation) return;
+    if (update.kind === 'context') {
+      contextUsage = { inputTokens: Math.max(contextUsage?.inputTokens ?? 0, update.context.inputTokens), maxInputTokens: update.context.maxInputTokens };
+      emit({ type: 'context', context: { ...contextUsage } });
+      return;
+    }
+    if (!update.text) return;
     const prior = assistantId ? messages.find((message) => message.id === assistantId) : undefined;
     if (prior) prior.content += update.text;
     else {
@@ -178,7 +187,7 @@ export function createDocumentationAgentSession({ context, options, credentialPr
       if (closing) await closing;
       generation += 1; starting = false;
       const running = activeTurn; if (running) running.controller.abort();
-      const current = runtime; runtime = null; assistantId = null; messages = []; error = null; setStatus('idle');
+      const current = runtime; runtime = null; assistantId = null; messages = []; error = null; contextUsage = null; setStatus('idle');
       if (running) await running.completion;
       if (current) await close(current, true);
       threadId = newThreadId(); agentTelemetry = telemetry.child({ package: 'documentation', component: 'agent' }).session(threadId);

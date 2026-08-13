@@ -1,12 +1,13 @@
 import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import type { Telemetry } from '../../package-contract.ts';
+import { modelContextWindow } from '../../model-profiles.ts';
 import { createDeepAgent, type BackendProtocolV2 } from 'deepagents';
 import { ChatOpenAI } from '@langchain/openai';
 import { tool } from 'langchain';
 import { z } from 'zod/v4';
 import type { BacklogDecision, BacklogMutation, BacklogStore } from './backlog-store.ts';
-import type { BacklogAgentRuntime, BacklogAgentRuntimeFactory, BacklogAgentRuntimeFactoryOptions, BacklogAgentTurn, BacklogAgentUpdate } from './agent-session.ts';
+import type { BacklogAgentContext, BacklogAgentRuntime, BacklogAgentRuntimeFactory, BacklogAgentRuntimeFactoryOptions, BacklogAgentTurn, BacklogAgentUpdate } from './agent-session.ts';
 
 const skillRoot = '/skills';
 const skillPath = '/skills/manage-backlog/SKILL.md';
@@ -256,6 +257,13 @@ function createBacklogTools(options: BacklogAgentRuntimeFactoryOptions) {
 function selectedContext(selected: BacklogDecision): string {
   return `<active-decision path="${selected.path}">\n<title>${selected.title}</title>\n<status>${selected.status}</status>\n<priority>${selected.priority}</priority>\n<plan-markdown>\n${selected.markdown}\n</plan-markdown>\n</active-decision>`;
 }
+function inputTokensOf(chunk: unknown): number | null {
+  if (!chunk || typeof chunk !== 'object') return null;
+  const message = chunk as { usage_metadata?: { input_tokens?: unknown }; response_metadata?: { usage?: { prompt_tokens?: unknown } } };
+  const inputTokens = message.usage_metadata?.input_tokens ?? message.response_metadata?.usage?.prompt_tokens;
+  return typeof inputTokens === 'number' && Number.isFinite(inputTokens) ? inputTokens : null;
+}
+
 function textOf(chunk: unknown): string {
   if (!chunk || typeof chunk !== 'object') return '';
   const content = (chunk as { content?: unknown }).content;
@@ -265,8 +273,8 @@ function textOf(chunk: unknown): string {
 }
 
 export class DeepAgentsRuntime implements BacklogAgentRuntime {
-  constructor(private readonly agent: any, private readonly telemetry: Telemetry) {}
-  async *stream(turn: BacklogAgentTurn): AsyncIterable<BacklogAgentUpdate> {
+  constructor(private readonly agent: any, private readonly telemetry: Telemetry, private readonly maxInputTokens?: number) {}
+  async *stream(turn: BacklogAgentTurn, signal?: AbortSignal): AsyncIterable<BacklogAgentUpdate> {
     const messages = turn.messages.map((message, index) => ({
       role: message.role,
       content: message.role === 'user' && index === turn.messages.length - 1 ? `${selectedContext(turn.selected)}\n\n<user-request>\n${message.content}\n</user-request>` : message.content,
@@ -277,11 +285,13 @@ export class DeepAgentsRuntime implements BacklogAgentRuntime {
     let assistantResponseOpen = false;
     const responses: string[] = [];
     try {
-      const stream = await this.agent.stream({ messages }, { configurable: { thread_id: turn.threadId }, streamMode: 'messages' });
+      const stream = await this.agent.stream({ messages }, { configurable: { thread_id: turn.threadId }, streamMode: 'messages', ...(signal ? { signal } : {}) });
       for await (const value of stream) {
         const [chunk, metadata] = value as [unknown, { langgraph_node?: unknown }];
         const isModelResponse = metadata?.langgraph_node === 'model' || metadata?.langgraph_node === 'model_request';
         if (!isModelResponse) { assistantResponseOpen = false; continue; }
+        const inputTokens = inputTokensOf(chunk);
+        if (inputTokens !== null && this.maxInputTokens !== undefined) yield { kind: 'context', context: { inputTokens, maxInputTokens: this.maxInputTokens } as BacklogAgentContext };
         const text = textOf(chunk);
         if (text) {
           if (assistantResponseOpen) responses[responses.length - 1] += text;
@@ -291,11 +301,11 @@ export class DeepAgentsRuntime implements BacklogAgentRuntime {
           yield { kind: 'assistant', text };
         }
       }
-      streamSpan.end({ status: 'ok', chunks, output: responses.map((content) => ({ role: 'assistant', content })) });
+      streamSpan.end({ status: signal?.aborted ? 'stopped' : 'ok', chunks, output: responses.map((content) => ({ role: 'assistant', content })) });
       this.telemetry.info('Backlog model stream completed', { chunks });
     } catch (error) {
-      streamSpan.fail(error, { chunks, output: responses.map((content) => ({ role: 'assistant', content })) });
-      this.telemetry.error('Backlog model stream failed', { error, chunks });
+      if (signal?.aborted) streamSpan.end({ status: 'stopped', chunks, output: responses.map((content) => ({ role: 'assistant', content })) });
+      else { streamSpan.fail(error, { chunks, output: responses.map((content) => ({ role: 'assistant', content })) }); this.telemetry.error('Backlog model stream failed', { error, chunks }); }
       throw error;
     }
   }
@@ -306,19 +316,20 @@ export function createDeepAgentsRuntimeFactory({ provider, model, repositoryRoot
   return async (options) => {
     const skill = await readFile(new URL('./skills/manage-backlog/SKILL.md', import.meta.url), 'utf8');
     const runtimeTelemetry = options.telemetry.child({ provider, model });
+    const chatModel = new ChatOpenAI({
+      model,
+      apiKey: options.apiKey,
+      temperature: 0,
+      configuration: provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {},
+    });
     const agent = createDeepAgent({
-      model: new ChatOpenAI({
-        model,
-        apiKey: options.apiKey,
-        temperature: 0,
-        configuration: provider === 'openrouter' ? { baseURL: 'https://openrouter.ai/api/v1' } : {},
-      }),
+      model: chatModel,
       tools: createBacklogTools(options),
       backend: createPackagedSkillBackend(skill, repositoryRoot),
       skills: ['/skills/'],
       checkpointer: false,
       systemPrompt: backlogSystemPrompt,
     });
-    return new DeepAgentsRuntime(agent, runtimeTelemetry);
+    return new DeepAgentsRuntime(agent, runtimeTelemetry, chatModel.profile.maxInputTokens ?? modelContextWindow(model));
   };
 }

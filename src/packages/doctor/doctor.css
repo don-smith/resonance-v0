@@ -327,9 +327,6 @@
   outline-offset: 1px;
 }
 .doctor-composer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 .doctor-reset,

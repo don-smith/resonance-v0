@@ -57,7 +57,7 @@
 .backlog-credential input { min-width: 0; flex: 1; }
 .backlog-composer { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 20px; border-top: 1px solid var(--line); }
 .backlog-composer textarea { width: 100%; min-height: 72px; resize: vertical; box-sizing: border-box; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 10px; font: 12px/1.5 var(--mono); }
-.backlog-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.backlog-composer-actions { gap: 8px; }
 .backlog-reset, .backlog-retry { border: 1px solid var(--line) !important; background: transparent !important; color: var(--ink) !important; }
 .backlog-confirm-delete { align-self: start !important; background: var(--danger) !important; border-color: var(--danger) !important; }
 

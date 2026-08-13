@@ -113,6 +113,9 @@ function writeString(storage, key, value) {
   }
 }
 
+function formatTokenCount(value) { if (value >= 1000000) { const rounded = Math.floor(value / 100000) / 10; return `${rounded % 1 === 0 ? rounded : rounded.toFixed(1)}M`; } if (value >= 1000) return `${Math.floor(value / 1000)}k`; return String(Math.floor(value)); }
+function formatContextUsage(context) { return context ? `${formatTokenCount(context.inputTokens)} / ${formatTokenCount(context.maxInputTokens)}` : ''; }
+
 function appendText(documentRoot, tag, text, className) {
   const element = documentRoot.createElement(tag);
   if (className) element.className = className;
@@ -120,7 +123,7 @@ function appendText(documentRoot, tag, text, className) {
   return element;
 }
 
-export default function createDoctor({ fetchFn = fetch } = {}) {
+export default function createDoctor({ fetchFn = fetch, eventSourceFactory = (url) => typeof EventSource === "function" ? new EventSource(url) : null } = {}) {
   let root;
   let workspace;
   let navigator;
@@ -140,6 +143,13 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
   }));
   let storedResults = {};
   let active = false;
+  let eventSource = null;
+  let lastPrompt = null;
+  let stopPending = false;
+  let credentialRequired = false;
+  let retryVisible = false;
+  let chatState = { messages: [], status: "idle", error: null, context: null };
+  agentUi = createAgentPanel({ prefix: "doctor", label: "AGENT / CHAT", ariaLabel: "Doctor agent", placeholder: "Ask about this check…", supportsStop: true, onSend: (prompt) => submitPrompt(prompt), onStop: () => stopAgent(), onReset: () => resetAgent(), onRetry: () => { if (lastPrompt) return submitPrompt(lastPrompt); }, onCredential: (key) => saveCredential(key), onError: (error) => { chatState.error = error?.message || String(error); renderAgent(); } });
 
   function showError(error) {
     root.replaceChildren();
@@ -348,14 +358,36 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
     }
     results.append(instructions);
   }
-  function resetAgent() {
-    agentUi.update({
-      status: "idle",
-      error: null,
-      canSend: (prompt) => Boolean(prompt.trim()),
-      messages: [],
-    });
+  function renderAgent() {
+    agentUi.update({ messages: chatState.messages, status: chatState.status, error: chatState.error, stopPending, credentialRequired, retryVisible, contextUsage: formatContextUsage(chatState.context), canSend: (prompt) => Boolean(prompt.trim()) });
   }
+  function applySnapshot(snapshot = {}, replaceMessages = true) {
+    chatState = { messages: replaceMessages ? snapshot.messages || [] : (snapshot.messages?.length ? snapshot.messages : chatState.messages), status: snapshot.status || "idle", error: snapshot.error || null, context: snapshot.context === undefined ? chatState.context : snapshot.context };
+    renderAgent();
+  }
+  function handleAgentEvent(event) {
+    let value; try { value = event?.data ? JSON.parse(event.data) : event; } catch { return; }
+    if (!value || typeof value.type !== "string") return;
+    if (value.type === "snapshot") applySnapshot(value.snapshot, false);
+    else if (value.type === "message") { const index = chatState.messages.findIndex((message) => message.id === value.message.id); if (index < 0) chatState.messages = [...chatState.messages, value.message]; else chatState.messages[index] = value.message; renderAgent(); }
+    else if (value.type === "status") { chatState.status = value.status; renderAgent(); }
+    else if (value.type === "context") { chatState.context = value.context; renderAgent(); }
+    else if (value.type === "error") { chatState.error = value.message; retryVisible = Boolean(lastPrompt); renderAgent(); }
+    else if (value.type === "credential-required") { credentialRequired = true; renderAgent(); }
+    else if (value.type === "stopped" || value.type === "done") { stopPending = false; renderAgent(); }
+  }
+  function connectEvents() { if (eventSource || !active) return; eventSource = eventSourceFactory("/api/doctor/agent/events"); if (!eventSource) return; eventSource.onmessage = handleAgentEvent; eventSource.onerror = () => { if (active) { chatState.error = "Connection interrupted"; renderAgent(); } }; }
+  function closeEvents() { eventSource?.close(); eventSource = null; }
+  async function submitPrompt(prompt = agentUi.prompt) {
+    const value = prompt.trim(); if (!value || chatState.status === "working") return;
+    lastPrompt = value;
+    const result = await requestJson("/api/doctor/agent/prompt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: value, selectedCheck: selectedCheck.id }) });
+    if (result.credentialRequired) { credentialRequired = true; } else { agentUi.clearPrompt(); retryVisible = false; }
+    renderAgent();
+  }
+  async function stopAgent() { if (chatState.status !== "working" || stopPending) return; stopPending = true; renderAgent(); try { const result = await requestJson("/api/doctor/agent/stop", { method: "POST" }); if (result.state) applySnapshot(result.state); } finally { stopPending = false; renderAgent(); } }
+  async function saveCredential(apiKey) { await requestJson("/api/doctor/agent/credential", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey }) }); credentialRequired = false; retryVisible = Boolean(lastPrompt); renderAgent(); }
+  async function resetAgent() { await requestJson("/api/doctor/agent/reset", { method: "POST" }); lastPrompt = null; stopPending = false; credentialRequired = false; retryVisible = false; agentUi.clearPrompt(); chatState = { messages: [], status: "idle", error: null, context: null }; renderAgent(); }
   async function requestJson(url, options) {
     const response = await fetchFn(url, options);
     const value = await response.json().catch(() => ({}));
@@ -402,6 +434,7 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
     const rememberedCheck = readString(storage, SELECTED_CHECK_STORAGE_KEY);
     setAgentVisible(agentVisible);
     root.hidden = false;
+    connectEvents();
     try {
       const value = await requestJson("/api/doctor");
       navigator.querySelector("h1").textContent = value.label;
@@ -423,6 +456,8 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
         () => ({ results: {} }),
       );
       storedResults = resultValue.results || {};
+      const agentState = await requestJson("/api/doctor/agent/state").catch(() => ({}));
+      applySnapshot(agentState);
       renderNavigation();
       renderResults();
     } catch (error) {
@@ -442,14 +477,6 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
       testName = root.querySelector(".doctor-test-name");
       results = root.querySelector(".doctor-results");
       agentToggle = root.querySelector(".doctor-agent-toggle");
-      agentUi = createAgentPanel({
-        prefix: "doctor",
-        label: "AGENT / CHAT",
-        ariaLabel: "Doctor agent",
-        placeholder: "Ask about this check…",
-        renderTranscript: (transcript) => transcript.replaceChildren(),
-        onReset: resetAgent,
-      });
       agentUi.mount(root.querySelector(".doctor-agent-slot"));
       agentToggle.addEventListener("click", () =>
         setAgentVisible(!agentVisible),
@@ -465,11 +492,12 @@ export default function createDoctor({ fetchFn = fetch } = {}) {
       });
       renderNavigation();
       renderResults();
-      resetAgent();
+      renderAgent();
     },
     activate,
     deactivate() {
       active = false;
+      closeEvents();
       root.hidden = true;
     },
   };

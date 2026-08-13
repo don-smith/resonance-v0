@@ -1,4 +1,4 @@
-import createAgentPanel from '../../ui/agent-panel.js';
+import createAgentPanel, { normalizeAgentMessageContent } from '../../ui/agent-panel.js';
 import createCollapsibleSection from '../../ui/collapsible-section.js';
 import { createLikeC4Renderer } from './architecture-likec4.tsx';
 
@@ -204,18 +204,18 @@ export default function createArchitecture({ fetchFn = fetch, eventSourceFactory
       if (message.role === 'user') {
         assistantGroup = null;
         assistantContent = null;
-        const item = element('p', undefined, { class: 'architecture-message architecture-message-user' });
+        const item = element('p', undefined, { class: 'resonance-agent-message resonance-agent-message-user architecture-message architecture-message-user' });
         item.append(element('strong', 'You'), element('span', message.content));
         target.append(item);
         continue;
       }
       if (!assistantGroup) {
-        assistantGroup = element('div', undefined, { class: 'architecture-message architecture-message-assistant' });
+        assistantGroup = element('div', undefined, { class: 'resonance-agent-message resonance-agent-message-assistant architecture-message architecture-message-assistant' });
         assistantContent = element('div', undefined, { class: 'architecture-message-content' });
         assistantGroup.append(element('strong', 'Agent'), assistantContent);
         target.append(assistantGroup);
       }
-      assistantContent.append(element('p', message.content));
+      assistantContent.append(element('p', normalizeAgentMessageContent(message.content)));
     }
     if (!messages.length) target.append(element('p', 'Ask about this C4 view or selected entity.', { class: 'architecture-chat-empty' }));
   }

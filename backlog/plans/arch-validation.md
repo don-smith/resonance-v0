@@ -75,16 +75,6 @@ This decision repairs those trust defects and operationalizes the hybrid authori
 - Update `docs/architecture.md` to explain the intended-vs-observed graph model, how to interpret `unknown` results, and how to add source bindings via LikeC4 metadata.
 - Document the checker registry pattern so new checkers can be added without modifying the dispatch logic.
 
-### 7. Agent review skill
-
-- Implement a dedicated review skill that produces a structured report distinguishing verified conformance, verified violations, unresolved questions, and qualitative agent assessment.
-- The agent runs checkers on demand, explains results, and suggests fixes for violations.
-
-### 8. Agent authoring skill
-
-- Implement a dedicated authoring skill for creating and editing views, diagrams, and model elements through conversation.
-- Enforce schema validation, stable IDs, serialized atomic writes, and stale-write detection.
-
 ## Non-goals
 
 - Automatic architecture discovery or inference from implementation code (static analysis extracts facts, not architecture).
@@ -93,12 +83,13 @@ This decision repairs those trust defects and operationalizes the hybrid authori
 - A CLI/CI adapter for enforcing rules outside the workspace.
 - Persisted validation results treated as authoritative state.
 - Adding new checker types beyond the repair and dependency-cruiser integration described here.
+- Agent review or authoring skills (these are separate decisions — see "Related decisions").
 
-## Relationship to "Express architecture"
+## Related decisions
 
-The Express architecture decision (backlog/plans/express-architecture.md) defines the hands-on build-out of the Architecture package, including validation rules and checkers in scope item 2. This decision repairs the trust defects discovered in the existing validation pipeline and introduces the intended-vs-observed graph model. The two decisions are complementary: Express architecture builds the checker scaffolding; this decision makes the results trustworthy.
-
-Criteria 7 and 8 (agent review and authoring skills) were moved from Express architecture to this decision, as they are not yet started and fit naturally alongside the other agent-facing improvements in this workstream.
+- **Express architecture** (`backlog/plans/express-architecture.md`) — defines the hands-on build-out of the Architecture package, including validation rules and checkers. This decision repairs the trust defects discovered in that validation pipeline and introduces the intended-vs-observed graph model. The two decisions are complementary: Express architecture builds the checker scaffolding; this decision makes the results trustworthy.
+- **Architecture review skill** (`backlog/plans/architecture-review-skill.md`) — a dedicated agent skill for producing structured architecture review reports.
+- **Architecture authoring skill** (`backlog/plans/architecture-authoring-skill.md`) — a dedicated agent skill for creating and editing LikeC4 model elements through conversation.
 
 ## Completion criteria
 
@@ -110,10 +101,8 @@ This decision is complete when:
 4. The route/asset checker requires positive evidence (contribution found, host registration inspected) and does not pass on absence of regex matches.
 5. The validation read path uses the LikeC4 model traversal, not the legacy JSON projection.
 6. `dependency-cruiser` is integrated and produces observed-graph facts for the first wave of checks (forbidden cross-package imports, forbidden package-to-host imports, cycles, required dependencies).
-7. 🔴 **Ask the Architecture agent to review package ownership and see a structured report with distinct findings.**
-   → The agent has `validate_architecture` which runs the ownership checker. **There is no dedicated "review" skill** that produces a structured report distinguishing verified conformance, verified violations, unresolved questions, and qualitative assessment. The agent can run validation, but the output format isn't enforced.
-8. 🔴 **Propose a model change through the agent and have it applied with validation.**
-   → The agent has write_file/edit_file capabilities for architecture files, and the system prompt instructs it to repair model issues. LikeC4 parse errors are returned as recoverable context. **There is no dedicated "authoring" skill** with schema validation and stable ID enforcement. The agent can do it, but with higher risk of inconsistent edits.
+7. The observed-graph abstraction is defined with a documented interface; dependency-cruiser is one adapter behind it, and checkers query the abstraction, not dependency-cruiser directly.
+8. The validation panel displays `unknown` results with the explanation "no deterministic evidence" rather than "checker not implemented" or similar.
 9. LikeC4 metadata source bindings are read and displayed; unbound elements are shown as authored/unverified, not as failures.
 10. The checker test suite mutates one fact per checker and asserts the expected failure.
 11. `bun test` passes.

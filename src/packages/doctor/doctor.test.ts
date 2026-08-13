@@ -8,6 +8,8 @@ import { createApp } from "../../server.ts";
 import { createHost } from "../../host.ts";
 import { createDoctorPackage } from "./index.ts";
 import createPackage from "./doctor.js";
+import { createTelemetry } from "../../telemetry.ts";
+import { createDoctorAgentSession } from "./doctor-agent.ts";
 
 async function withServer(run, options) {
   const server = await createApp(options);
@@ -45,7 +47,11 @@ test("doctor composes through server and browser contracts", async () => {
         assert.equal(doctor.id, "doctor");
         assert.equal(doctor.label, "Doctor");
         assert.equal(doctor.checks.length, 5);
+        const agentState = await fetch(`${baseUrl}/api/doctor/agent/state`).then((response) => response.json());
+        assert.deepEqual(agentState, { messages: [], status: "idle", hasSession: false, error: null, context: null });
+        assert.equal((await fetch(`${baseUrl}/api/doctor/agent/prompt`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: "Explain this check", selectedCheck: "unit-tests" }) })).status, 202);
         assert.equal(
+
           (await fetch(`${baseUrl}/assets/doctor/doctor.js`)).status,
           200,
         );
@@ -386,10 +392,54 @@ test("restores Doctor's selected check and agent visibility from package-local s
   }
 });
 
+test("the Doctor agent preserves check context and streams through the shared session contract", async () => {
+  const events: any[] = [];
+  const session = createDoctorAgentSession({ provider: "openrouter", model: "test-model", telemetry: createTelemetry({ config: { mode: "off" } }), credentialProvider: async () => "local-key", runtimeFactory: async () => ({
+    async *stream() { yield { kind: "context" as const, context: { inputTokens: 2400, maxInputTokens: 10000 } }; yield { kind: "assistant" as const, text: "Review the failure." }; },
+    async dispose() {},
+  }) });
+  session.subscribe((event) => events.push(event));
+  await session.submitPrompt({ prompt: "Why did this fail?", check: { id: "unit-tests", label: "Unit tests", description: "Run tests", result: undefined } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(session.snapshot().context?.inputTokens, 2400);
+  assert.match(session.snapshot().messages.at(-1)?.content || "", /Review the failure/);
+  assert.ok(events.some((event) => event.type === "context"));
+  await session.dispose();
+});
+
+test("keeps each Doctor response after the prompt that produced it", async () => {
+  const session = createDoctorAgentSession({
+    provider: "openrouter",
+    model: "test-model",
+    credentialProvider: async () => "local-key",
+    runtimeFactory: async () => ({
+      async *stream(turn) {
+        const promptCount = turn.messages.filter((message) => message.role === "user").length;
+        yield { kind: "assistant" as const, text: `Response ${promptCount}` };
+      },
+      async dispose() {},
+    }),
+  });
+  const check = { id: "unit-tests", label: "Unit tests", description: "Run tests" };
+  await session.submitPrompt({ prompt: "First request", check });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await session.submitPrompt({ prompt: "Second request", check });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(session.snapshot().messages.map((message) => [message.role, message.content]), [
+    ["user", "First request"],
+    ["assistant", "Response 1"],
+    ["user", "Second request"],
+    ["assistant", "Response 2"],
+  ]);
+  await session.dispose();
+});
+
 test("renders check navigation, a default unit-test view, and a toggleable agent panel", async () => {
   const { document } = parseHTML("<!doctype html><body></body>");
   const mount = document.createElement("section");
+  let stream;
   const instance = createPackage({
+    eventSourceFactory: () => (stream = { close() {} }),
     fetchFn: async () => ({
       ok: true,
       async json() {
@@ -399,6 +449,10 @@ test("renders check navigation, a default unit-test view, and a toggleable agent
   });
   instance.mount(mount);
   await instance.activate();
+  stream.onmessage({ data: JSON.stringify({ type: "status", status: "working" }) });
+  assert.equal(mount.querySelector(".doctor-send").textContent, "Stop");
+  assert.equal(mount.querySelector(".doctor-send").classList.contains("resonance-agent-stop"), true);
+  stream.onmessage({ data: JSON.stringify({ type: "status", status: "idle" }) });
 
   assert.deepEqual(
     [...mount.querySelectorAll(".doctor-nav-test")].map(
@@ -424,7 +478,7 @@ test("renders check navigation, a default unit-test view, and a toggleable agent
     mount.querySelector(".doctor-run-check").textContent,
     "Run unit tests",
   );
-  assert.equal(mount.querySelector(".doctor-transcript").textContent, "");
+  assert.equal(mount.querySelector(".doctor-transcript").textContent, "Ask about the selected item.");
   const prompt = mount.querySelector(".doctor-composer textarea");
   const send = mount.querySelector(".doctor-send");
   assert.equal(send.disabled, true);

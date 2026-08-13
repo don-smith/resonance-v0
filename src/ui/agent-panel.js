@@ -5,9 +5,13 @@ function element(documentRoot, name, text, attributes = {}) {
   return node;
 }
 
+export function normalizeAgentMessageContent(content) {
+  return String(content ?? '').replace(/^(?:[ \t]*\r?\n)+/, '');
+}
+
 function defaultMessage(documentRoot, message, prefix) {
-  const item = element(documentRoot, 'p', undefined, { class: `${prefix}-message ${prefix}-message-${message.role}` });
-  item.append(element(documentRoot, 'strong', message.role === 'user' ? 'You' : 'Agent'), element(documentRoot, 'span', message.content));
+  const item = element(documentRoot, 'p', undefined, { class: `resonance-agent-message resonance-agent-message-${message.role} ${prefix}-message ${prefix}-message-${message.role}` });
+  item.append(element(documentRoot, 'strong', message.role === 'user' ? 'You' : 'Agent'), element(documentRoot, 'span', normalizeAgentMessageContent(message.content)));
   return item;
 }
 
@@ -65,11 +69,13 @@ export default function createAgentPanel({
       sendButton.type = 'button';
       sendButton.textContent = stopping ? 'Stopping…' : 'Stop';
       sendButton.classList.toggle(`${prefix}-stop`, true);
+      sendButton.classList.toggle('resonance-agent-stop', true);
       sendButton.disabled = stopping;
     } else {
       sendButton.type = 'submit';
       sendButton.textContent = 'Send';
       sendButton.classList.toggle(`${prefix}-stop`, false);
+      sendButton.classList.toggle('resonance-agent-stop', false);
       const canSend = typeof state.canSend === 'function' ? state.canSend(promptInput.value, state) : state.canSend;
       sendButton.disabled = working || !canSend;
     }

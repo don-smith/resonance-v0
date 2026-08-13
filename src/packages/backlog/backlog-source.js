@@ -1,6 +1,8 @@
 import createAgentPanel from '../../ui/agent-panel.js';
 import createCollapsibleSection from '../../ui/collapsible-section.js';
 
+function formatTokenCount(value) { if (value >= 1000000) { const rounded = Math.floor(value / 100000) / 10; return `${rounded % 1 === 0 ? rounded : rounded.toFixed(1)}M`; } if (value >= 1000) return `${Math.floor(value / 1000)}k`; return String(Math.floor(value)); }
+function formatContextUsage(context) { return context ? `${formatTokenCount(context.inputTokens)} / ${formatTokenCount(context.maxInputTokens)}` : ''; }
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
@@ -52,16 +54,19 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
   let pendingConfirmation = null;
   let credentialRequired = false;
   let retryVisible = false;
+  let stopPending = false;
   let agentVisible = true;
   const collapsedGroups = new Set();
   let storage;
-  let chatState = { messages: [], status: 'idle', error: null, pendingDeletion: null };
+  let chatState = { messages: [], status: 'idle', error: null, pendingDeletion: null, context: null };
   agentUi = createAgentPanel({
     prefix: 'backlog',
     label: 'AGENT / CHAT',
     ariaLabel: 'Backlog agent',
     placeholder: 'Ask about this decision…',
+    supportsStop: true,
     onSend: (prompt) => submitPrompt(prompt),
+    onStop: () => stop(),
     onReset: () => reset(),
     onRetry: () => { if (lastPrompt) return submitPrompt(lastPrompt); },
     onCredential: (key) => saveCredentialValue(key),
@@ -101,7 +106,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     if (!list.children.length) list.innerHTML = '<p class="backlog-empty">No decisions found.</p>';
   }
   function renderTranscript() {
-    agentUi.update({ messages: chatState.messages, status: chatState.status, error: chatState.error, canSend: () => Boolean(selectedPath && agentUi.prompt.trim()), credentialRequired, retryVisible });
+    agentUi.update({ messages: chatState.messages, status: chatState.status, error: chatState.error, stopPending, contextUsage: formatContextUsage(chatState.context), canSend: () => Boolean(selectedPath && agentUi.prompt.trim()), credentialRequired, retryVisible });
     if (chatState.pendingDeletion) showConfirmation(chatState.pendingDeletion);
   }
   function showCredential(show = true) {
@@ -129,7 +134,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
         else messages[index] = message;
       }
     }
-    chatState = { messages, status: snapshot.status || 'idle', error: snapshot.error || null, pendingDeletion: snapshot.pendingDeletion || null };
+    chatState = { messages, status: snapshot.status || 'idle', error: snapshot.error || null, pendingDeletion: snapshot.pendingDeletion || null, context: snapshot.context === undefined ? chatState.context : snapshot.context };
     if (!chatState.pendingDeletion) hideConfirmation();
     renderTranscript();
   }
@@ -145,6 +150,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     if (value.type === 'snapshot') applySnapshot(value.snapshot);
     else if (value.type === 'message') applyMessage(value.message);
     else if (value.type === 'status') { chatState.status = value.status; renderTranscript(); }
+    else if (value.type === 'context') { chatState.context = value.context; renderTranscript(); }
     else if (value.type === 'error') { chatState.error = value.message; retryVisible = Boolean(lastPrompt); renderTranscript(); }
     else if (value.type === 'credential-required') showCredential(true);
     else if (value.type === 'deletion-confirmation') showConfirmation(value.confirmation);
@@ -153,7 +159,7 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
       chatState.messages = [...chatState.messages, { id: `mutation-${value.revision}`, role: 'assistant', content: `Committed ${value.affectedPaths.join(', ')}.` }];
       renderTranscript();
       queueRefresh(value.revision);
-    } else if (value.type === 'done') renderTranscript();
+    } else if (value.type === 'stopped' || value.type === 'done') { stopPending = false; renderTranscript(); }
   }
   function connectEvents() {
     if (eventSource || !active) return;
@@ -257,11 +263,26 @@ export default function createBacklog({ fetchFn = fetch, eventSourceFactory = (u
     if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Deletion could not be confirmed.');
     hideConfirmation();
   }
+  async function stop() {
+    if (chatState.status !== 'working' || stopPending) return;
+    stopPending = true;
+    renderTranscript();
+    try {
+      const response = await fetchFn('/api/backlog/agent/stop', { method: 'POST' });
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(value.error || 'Agent could not be stopped.');
+      if (value.state) applySnapshot(value.state, true);
+    } finally {
+      stopPending = false;
+      renderTranscript();
+    }
+  }
   async function reset() {
     const response = await fetchFn('/api/backlog/agent/reset', { method: 'POST' });
     if (!response.ok) throw new Error('Chat could not be reset.');
     pendingPrompt = null;
     lastPrompt = null;
+    stopPending = false;
     retryVisible = false;
     agentUi.clearPrompt();
     applySnapshot((await response.json()).state, true);

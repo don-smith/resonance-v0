@@ -4,21 +4,24 @@ import type { BacklogDecision, BacklogMutation, BacklogStore } from './backlog-s
 
 export type BacklogAgentStatus = 'idle' | 'working' | 'error';
 export type BacklogAgentMessage = { id: string; role: 'user' | 'assistant'; content: string };
+export type BacklogAgentContext = { inputTokens: number; maxInputTokens: number };
 export type BacklogDeletionConfirmation = { id: string; path: string; title: string };
-export type BacklogAgentSnapshot = { messages: BacklogAgentMessage[]; status: BacklogAgentStatus; hasSession: boolean; error: string | null; pendingDeletion: BacklogDeletionConfirmation | null };
-export type BacklogAgentUpdate = { kind: 'assistant'; text: string };
+export type BacklogAgentSnapshot = { messages: BacklogAgentMessage[]; status: BacklogAgentStatus; hasSession: boolean; error: string | null; pendingDeletion: BacklogDeletionConfirmation | null; context: BacklogAgentContext | null };
+export type BacklogAgentUpdate = { kind: 'assistant'; text: string } | { kind: 'context'; context: BacklogAgentContext };
 export type BacklogAgentTurn = { messages: readonly BacklogAgentMessage[]; selected: BacklogDecision; threadId: string };
-export type BacklogAgentRuntime = { stream(turn: BacklogAgentTurn): AsyncIterable<BacklogAgentUpdate>; dispose(): Promise<void> };
+export type BacklogAgentRuntime = { stream(turn: BacklogAgentTurn, signal?: AbortSignal): AsyncIterable<BacklogAgentUpdate>; dispose(): Promise<void> };
 export type BacklogAgentRuntimeFactoryOptions = { apiKey: string; store: BacklogStore; telemetry: Telemetry; onMutation(result: BacklogMutation): void; requestDeletion(decision: BacklogDecision): Promise<BacklogDeletionConfirmation> };
 export type BacklogAgentRuntimeFactory = (options: BacklogAgentRuntimeFactoryOptions) => Promise<BacklogAgentRuntime>;
 export type BacklogAgentEvent =
   | { type: 'snapshot'; snapshot: BacklogAgentSnapshot }
   | { type: 'message'; message: BacklogAgentMessage }
   | { type: 'status'; status: BacklogAgentStatus }
+  | { type: 'context'; context: BacklogAgentContext }
   | { type: 'error'; message: string }
   | { type: 'credential-required' }
   | { type: 'deletion-confirmation'; confirmation: BacklogDeletionConfirmation }
   | { type: 'mutation-committed'; revision: number; affectedPaths: string[] }
+  | { type: 'stopped' }
   | { type: 'done' };
 
 export class BacklogAgentBusyError extends Error {
@@ -46,12 +49,14 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
   let status: BacklogAgentStatus = 'idle';
   let error: string | null = null;
   let messages: BacklogAgentMessage[] = [];
+  let contextUsage: BacklogAgentContext | null = null;
   let pendingDeletion: BacklogDeletionConfirmation | null = null;
   let revision = 0;
   let generation = 0;
   let starting = false;
   let closing: Promise<void> | null = null;
   let assistantId: string | null = null;
+  let activeTurn: { controller: AbortController; completion: Promise<void> } | null = null;
   const listeners = new Set<(event: BacklogAgentEvent) => void>();
 
   const snapshot = (): BacklogAgentSnapshot => ({
@@ -60,6 +65,7 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
     hasSession: Boolean(runtime),
     error,
     pendingDeletion: pendingDeletion ? { ...pendingDeletion } : null,
+    context: contextUsage ? { ...contextUsage } : null,
   });
   const emit = (event: BacklogAgentEvent) => listeners.forEach((listener) => listener(event));
   const setStatus = (next: BacklogAgentStatus) => { status = next; emit({ type: 'status', status }); };
@@ -93,7 +99,13 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
     return { ...pendingDeletion };
   };
   const onUpdate = (turn: number, update: BacklogAgentUpdate) => {
-    if (turn !== generation || update.kind !== 'assistant' || !update.text) return;
+    if (turn !== generation) return;
+    if (update.kind === 'context') {
+      contextUsage = { inputTokens: Math.max(contextUsage?.inputTokens ?? 0, update.context.inputTokens), maxInputTokens: update.context.maxInputTokens };
+      emit({ type: 'context', context: { ...contextUsage } });
+      return;
+    }
+    if (!update.text) return;
     const prior = assistantId ? messages.find((message) => message.id === assistantId) : undefined;
     if (prior) prior.content += update.text;
     else {
@@ -141,18 +153,26 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
     const lastUser = messages.findLastIndex((message) => message.role === 'user');
     return messages.slice(lastUser + 1).filter((message) => message.role === 'assistant').map((message) => ({ role: message.role, content: message.content }));
   };
-  const run = async (turn: number, current: BacklogAgentRuntime, selected: BacklogDecision, turnSpan: ReturnType<Telemetry['span']>) => {
+  const run = async (turn: number, current: BacklogAgentRuntime, selected: BacklogDecision, controller: AbortController, turnSpan: ReturnType<Telemetry['span']>) => {
     agentTelemetry.info('Backlog agent stream started', { selectedPath: selected.path });
     try {
-      for await (const update of current.stream({ messages: messages.map((message) => ({ ...message })), selected, threadId })) onUpdate(turn, update);
-      if (turn === generation && status === 'working') {
-        assistantId = null;
-        setStatus('idle');
+      for await (const update of current.stream({ messages: messages.map((message) => ({ ...message })), selected, threadId }, controller.signal)) onUpdate(turn, update);
+      if (turn !== generation) return;
+      assistantId = null;
+      setStatus('idle');
+      if (controller.signal.aborted) {
+        turnSpan.end({ status: 'stopped', output: currentTurnOutput() });
+        emit({ type: 'stopped' });
+      } else {
         turnSpan.end({ status: 'ok', output: currentTurnOutput() });
         agentTelemetry.info('Backlog agent stream completed', { selectedPath: selected.path });
         emit({ type: 'done' });
       }
     } catch (cause) {
+      if (controller.signal.aborted) {
+        if (turn === generation) { assistantId = null; setStatus('idle'); turnSpan.end({ status: 'stopped', output: currentTurnOutput() }); emit({ type: 'stopped' }); }
+        return;
+      }
       if (turn !== generation) return;
       turnSpan.fail(cause, { status: 500, output: currentTurnOutput() });
       agentTelemetry.error('Backlog agent stream failed', { error: cause, selectedPath: selected.path });
@@ -160,6 +180,8 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
       error = 'Backlog agent request failed.';
       setStatus('error');
       emit({ type: 'error', message: error });
+    } finally {
+      if (activeTurn?.controller === controller) activeTurn = null;
     }
   };
 
@@ -192,7 +214,11 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
         assistantId = null;
         emit({ type: 'message', message: { ...user } });
         setStatus('working');
-        void run(turn, current, selected, turnSpan);
+        const controller = new AbortController();
+        const running = { controller, completion: Promise.resolve() };
+        activeTurn = running;
+        running.completion = run(turn, current, selected, controller, turnSpan);
+        void running.completion;
         return { accepted: true as const };
       } catch (cause) {
         if (turn === generation && cause instanceof CredentialRequiredError) {
@@ -210,6 +236,13 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
         throw cause;
       } finally { if (turn === generation) starting = false; }
     },
+    async stop() {
+      const current = activeTurn;
+      if (status !== 'working' || !current) return { stopped: false as const, state: snapshot() };
+      current.controller.abort();
+      await current.completion;
+      return { stopped: true as const, state: snapshot() };
+    },
     async confirmDeletion(id: string) {
       if (!pendingDeletion || pendingDeletion.id !== id) throw new BacklogAgentConfirmationError('Deletion confirmation is no longer valid.');
       if (status === 'working' || starting) throw new BacklogAgentBusyError();
@@ -225,14 +258,18 @@ export function createBacklogAgentSession({ store, credentialProvider, runtimeFa
       if (closing) await closing;
       generation += 1;
       starting = false;
+      const running = activeTurn;
+      if (running) running.controller.abort();
       const current = runtime;
       runtime = null;
       assistantId = null;
       messages = [];
       error = null;
+      contextUsage = null;
       pendingDeletion = null;
       setStatus('idle');
       emit({ type: 'snapshot', snapshot: snapshot() });
+      if (running) await running.completion;
       if (current) await close(current, true);
       return snapshot();
     },

@@ -206,6 +206,12 @@ export function createBacklogPackage({ runtimeFactory }: { runtimeFactory?: Back
             },
           },
           {
+            method: 'POST', path: '/api/backlog/agent/stop', handler: async (_request, response) => {
+              try { response.json(200, await session.stop()); }
+              catch (error) { sendError(response, error, telemetry); }
+            },
+          },
+          {
             method: 'POST', path: '/api/backlog/agent/credential', handler: async (request, response) => {
               try {
                 const body = await request.readJson<{ apiKey?: unknown }>(8 * 1024);

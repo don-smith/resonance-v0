@@ -69,6 +69,27 @@ test('emits committed revisions, invalidates old confirmations, and ignores stal
   await session.submitPrompt({ prompt: 'Remove it again.', selectedPath: decision.path }); const stale = await log.requestDeletion!(decision); log.release!(); await new Promise((resolve) => setTimeout(resolve, 0)); await session.reset(); await assert.rejects(() => session.confirmDeletion(stale.id), /no longer valid/); const committedBeforeStaleCallback = events.filter((event) => event.type === 'mutation-committed').length; log.onMutation!({ affectedPaths: ['backlog/todo.yaml'] }); assert.equal(events.filter((event) => event.type === 'mutation-committed').length, committedBeforeStaleCallback); log.release!(); await new Promise((resolve) => setTimeout(resolve, 0)); assert.equal(session.snapshot().messages.length, 0); assert.equal(log.dispose, 1);
 });
 
+test('stops an active Backlog turn without treating cancellation as an error', async () => {
+  const { store } = fakeStore();
+  const session = createBacklogAgentSession({
+    store,
+    credentialProvider: async () => 'local-secret',
+    runtimeFactory: async () => ({
+      async *stream(_turn, signal) {
+        await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve(), { once: true }));
+        throw new Error('cancelled');
+      },
+      async dispose() {},
+    }),
+  });
+  await session.submitPrompt({ prompt: 'Stop this.', selectedPath: decision.path });
+  const result = await session.stop();
+  assert.equal(result.stopped, true);
+  assert.equal(session.snapshot().status, 'idle');
+  assert.equal(session.snapshot().error, null);
+  await session.dispose();
+});
+
 test('records the original model failure while preserving the generic user-facing state', async () => {
   const { store } = fakeStore(); const records: any[] = [];
   const telemetry = createTelemetry({ config: { mode: 'console' }, console: null, exporter: { record(record) { records.push(record); }, async flush() {} } });

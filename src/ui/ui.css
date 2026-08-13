@@ -6,13 +6,22 @@
 .resonance-agent-header .eyebrow { margin: 0; }
 .resonance-agent-status { margin: 0; color: var(--muted); font: 11px var(--mono); }
 .resonance-agent-transcript { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.resonance-agent-message { display: flex; flex-direction: column; gap: 5px; margin: 0 0 18px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.resonance-agent-message-assistant span { display: block; }
+.resonance-agent-message strong { color: var(--muted); font: 10px var(--mono); text-transform: uppercase; }
+.resonance-agent-message-user { margin-right: 12px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); }
+.resonance-agent-message-user strong { color: var(--accent); }
 .resonance-agent-panel button { border: 1px solid var(--ink); background: var(--ink); color: var(--paper); padding: 8px 12px; cursor: pointer; font: 10px var(--mono); }
 .resonance-agent-panel button:disabled { cursor: not-allowed; opacity: .45; }
+.resonance-agent-stop { border-color: var(--danger) !important; background: var(--danger) !important; }
+.resonance-agent-panel input:focus-visible, .resonance-agent-panel textarea:focus-visible { border-color: var(--accent); outline: 1px solid var(--accent); outline-offset: 1px; }
 .resonance-agent-state { display: flex; justify-content: flex-end; }
 .resonance-agent-credential, .resonance-agent-auxiliary { flex: 0 0 auto; }
 .resonance-agent-composer { display: flex; flex-direction: column; }
-.resonance-agent-composer-actions { display: flex; align-items: center; justify-content: space-between; }
-.resonance-agent-context { white-space: nowrap; }
+.resonance-agent-composer-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.resonance-agent-composer-actions .resonance-agent-send { justify-self: start; }
+.resonance-agent-context { justify-self: center; color: var(--muted); font: 10px var(--mono); white-space: nowrap; }
+.resonance-agent-composer-actions .resonance-agent-reset { justify-self: end; }
 .resonance-collapsible-items[hidden] { display: none; }
 .resonance-collapsible-toggle { cursor: pointer; }
 .resonance-collapsible-indicator { user-select: none; }

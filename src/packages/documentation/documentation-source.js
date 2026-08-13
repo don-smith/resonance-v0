@@ -1,5 +1,7 @@
 import createAgentPanel from '../../ui/agent-panel.js';
 
+function formatTokenCount(value) { if (value >= 1000000) { const rounded = Math.floor(value / 100000) / 10; return `${rounded % 1 === 0 ? rounded : rounded.toFixed(1)}M`; } if (value >= 1000) return `${Math.floor(value / 1000)}k`; return String(Math.floor(value)); }
+function formatContextUsage(context) { return context ? `${formatTokenCount(context.inputTokens)} / ${formatTokenCount(context.maxInputTokens)}` : ''; }
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character]));
 }
@@ -56,7 +58,7 @@ export default function createDocumentationPackage({ fetchFn = fetch, eventSourc
   let retryVisible = false;
   let lastPrompt = null;
   let stopPending = false;
-  let chatState = { messages: [], status: 'idle', error: null };
+  let chatState = { messages: [], status: 'idle', error: null, context: null };
   let collapsedFolders = new Set();
   let collapsedFoldersStorage;
   let collapsedFoldersStorageKey;
@@ -101,12 +103,12 @@ export default function createDocumentationPackage({ fetchFn = fetch, eventSourc
     }
   }
   function renderAgent() {
-    agentUi.update({ messages: chatState.messages, status: chatState.status, error: chatState.error, stopPending, credentialRequired, retryVisible, canSend: () => Boolean(selectedPath && agentUi.prompt.trim()) });
+    agentUi.update({ messages: chatState.messages, status: chatState.status, error: chatState.error, stopPending, credentialRequired, retryVisible, contextUsage: formatContextUsage(chatState.context), canSend: () => Boolean(selectedPath && agentUi.prompt.trim()) });
     renderSelectionContext();
   }
   function showCredential(show = true) { credentialRequired = show; agentUi.update({ credentialRequired }); if (show) agentUi.focusCredential(); }
   function applySnapshot(snapshot, replaceMessages = false) {
-    chatState = { messages: replaceMessages ? snapshot.messages || [] : (snapshot.messages?.length ? snapshot.messages : chatState.messages), status: snapshot.status || 'idle', error: snapshot.error || null };
+    chatState = { messages: replaceMessages ? snapshot.messages || [] : (snapshot.messages?.length ? snapshot.messages : chatState.messages), status: snapshot.status || 'idle', error: snapshot.error || null, context: snapshot.context === undefined ? chatState.context : snapshot.context };
     renderAgent();
   }
   function applyMessage(message) {
@@ -121,6 +123,7 @@ export default function createDocumentationPackage({ fetchFn = fetch, eventSourc
     if (value.type === 'snapshot') applySnapshot(value.snapshot);
     else if (value.type === 'message') applyMessage(value.message);
     else if (value.type === 'status') { chatState.status = value.status; renderAgent(); }
+    else if (value.type === 'context') { chatState.context = value.context; renderAgent(); }
     else if (value.type === 'error') { chatState.error = value.message; retryVisible = Boolean(lastPrompt); renderAgent(); }
     else if (value.type === 'credential-required') showCredential(true);
     else if (value.type === 'mutation-committed') { highlightedText = ''; renderSelectionContext(); if (selectedPath) void showDocument(selectedPath).catch((error) => showError(contentElement, error)); }
@@ -183,7 +186,7 @@ export default function createDocumentationPackage({ fetchFn = fetch, eventSourc
   }
   async function stop() { if (chatState.status !== 'working' || stopPending) return; stopPending = true; renderAgent(); try { const result = await json('/api/documentation/agent/stop', { method: 'POST' }); if (result.state) applySnapshot(result.state, true); } finally { stopPending = false; renderAgent(); } }
   async function saveCredentialValue(apiKey) { await json('/api/documentation/agent/credential', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey }) }); showCredential(false); retryVisible = Boolean(lastPrompt); renderAgent(); }
-  async function reset() { await json('/api/documentation/agent/reset', { method: 'POST' }); lastPrompt = null; retryVisible = false; stopPending = false; highlightedText = ''; agentUi.clearPrompt(); showCredential(false); chatState = { messages: [], status: 'idle', error: null }; renderAgent(); }
+  async function reset() { await json('/api/documentation/agent/reset', { method: 'POST' }); lastPrompt = null; retryVisible = false; stopPending = false; highlightedText = ''; agentUi.clearPrompt(); showCredential(false); chatState = { messages: [], status: 'idle', error: null, context: null }; renderAgent(); }
 
   return {
     mount(mountRoot) {

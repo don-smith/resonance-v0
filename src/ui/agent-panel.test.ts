@@ -19,7 +19,7 @@ test('renders agent state and delegates composer actions', () => {
   document.body.append(mount);
   panel.mount(mount);
   panel.update({
-    messages: [{ id: '1', role: 'user', content: 'Review this' }, { id: '2', role: 'assistant', content: 'Looks good.' }],
+    messages: [{ id: '1', role: 'user', content: 'Review this' }, { id: '2', role: 'assistant', content: '\n\nLooks good.' }],
     status: 'idle',
     canSend: true,
   });
@@ -38,6 +38,7 @@ test('renders agent state and delegates composer actions', () => {
 
   panel.update({ status: 'working', canSend: false, stopPending: false });
   assert.equal((mount.querySelector('.test-agent-send') as HTMLButtonElement).textContent, 'Stop');
+  assert.equal((mount.querySelector('.test-agent-send') as HTMLButtonElement).classList.contains('resonance-agent-stop'), true);
   (mount.querySelector('.test-agent-send') as HTMLButtonElement).click();
   assert.deepEqual(calls.at(-1), { type: 'stop' });
 });

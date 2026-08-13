@@ -78,8 +78,12 @@ test('shared agent panels fill their mount and share panel controls', async () =
   const architectureCss = await readFile(new URL('./architecture/architecture.css', import.meta.url), 'utf8');
   assert.match(sharedCss, /\.resonance-agent-panel \{[^}]*height: 100%;[^}]*min-height: 0;/s);
   assert.match(sharedCss, /\.resonance-agent-transcript \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;/s);
+  assert.match(sharedCss, /\.resonance-agent-message-user \{[^}]*background: var\(--accent-soft\);/s);
+  assert.match(sharedCss, /\.resonance-agent-composer-actions \{[^}]*grid-template-columns:/s);
   assert.match(sharedCss, /\.resonance-agent-header \{[^}]*padding: 28px 20px 20px;/s);
   assert.match(sharedCss, /\.resonance-agent-panel button \{[^}]*background: var\(--ink\);[^}]*color: var\(--paper\);/s);
+  assert.match(sharedCss, /\.resonance-agent-stop \{[^}]*background: var\(--danger\)/s);
+  assert.match(sharedCss, /\.resonance-agent-panel input:focus-visible, \.resonance-agent-panel textarea:focus-visible \{[^}]*border-color: var\(--accent\)/s);
   assert.doesNotMatch(architectureCss, /\.architecture-agent button \{/);
 });
 

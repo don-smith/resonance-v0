@@ -26,6 +26,7 @@ The provider and model are non-secret package inputs. `openai` and the OpenAI-co
 - `GET /api/backlog/agent/events` is a snapshot-first SSE stream.
 - `POST /api/backlog/agent/prompt` accepts `{ prompt, selectedPath }`.
 - `POST /api/backlog/agent/credential` accepts a local key but returns no key data.
+- `POST /api/backlog/agent/stop` cancels the active model stream and preserves received text.
 - `POST /api/backlog/agent/confirm-deletion` accepts a server-issued confirmation id.
 - `POST /api/backlog/agent/reset` starts a fresh in-memory chat.
 

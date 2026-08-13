@@ -73,6 +73,23 @@ test('restores Documentation navigation, selected document, and agent visibility
   } finally { delete (globalThis as any).window; delete (globalThis as any).document; }
 });
 
+test('renders shared user styling and context usage in the Documentation agent panel', async () => {
+  const { window, document } = parseHTML('<!doctype html><body></body>');
+  globalThis.window = window; globalThis.document = document;
+  let stream: any;
+  const browser = createBrowser({ fetchFn: async (url) => {
+    if (url.endsWith('/tree')) return { ok: true, async json() { return { rootName: 'repository', documents: ['README.md'], tree: [{ type: 'file', name: 'README.md', path: 'README.md' }] }; } };
+    if (url.endsWith('/agent/state')) return { ok: true, async json() { return { messages: [{ id: 'user-1', role: 'user', content: 'Explain this' }], status: 'idle', error: null, context: null }; } };
+    return { ok: true, async json() { return { path: 'README.md', html: '<h1>README</h1>' }; } };
+  }, eventSourceFactory: () => (stream = { onmessage: null, close() {} }) });
+  try {
+    const mount = document.createElement('section'); document.body.append(mount); browser.mount(mount); await browser.activate();
+    assert.ok(mount.querySelector('.resonance-agent-message-user'));
+    stream.onmessage({ data: JSON.stringify({ type: 'context', context: { inputTokens: 42876, maxInputTokens: 1048576 } }) });
+    assert.equal(mount.querySelector('.documentation-context')?.textContent, '42k / 1M');
+  } finally { browser.deactivate(); delete (globalThis as any).window; delete (globalThis as any).document; }
+});
+
 test('passes the active document and highlighted text to the agent and refreshes after an edit', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-documentation-agent-'));
   try {
@@ -89,7 +106,7 @@ test('passes the active document and highlighted text to the agent and refreshes
       async dispose() {},
     });
     await withServer(root, runtimeFactory, async (base) => {
-      assert.deepEqual(await fetch(`${base}/api/documentation/agent/state`).then((response) => response.json()), { messages: [], status: 'idle', hasSession: false, error: null });
+      assert.deepEqual(await fetch(`${base}/api/documentation/agent/state`).then((response) => response.json()), { messages: [], status: 'idle', hasSession: false, error: null, context: null });
       const credential = await fetch(`${base}/api/documentation/agent/credential`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ apiKey: 'local-key' }) });
       assert.equal(credential.status, 200);
       const prompt = await fetch(`${base}/api/documentation/agent/prompt`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'Reword this.', selectedPath: 'README.md', selectedText: 'Original sentence.' }) });
