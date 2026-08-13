@@ -8,6 +8,29 @@ The Architecture package has a validation system that reports `pass`/`fail`/`unk
 
 This decision repairs those trust defects and operationalizes the hybrid authority model: **intended graph** (authored LikeC4 model + executable rules) compared against **observed graph** (facts extracted from the current codebase). Validation succeeds only when deterministic evidence supports the finding.
 
+## Agreed scope for continued planning
+
+The trust-repair slice is the accepted baseline for this decision: canonical LikeC4 parsing and revision tracking, explicit checker dispatch, Shell checker wiring, positive route/asset evidence, canonical-model traversal, and coverage reporting are treated as completed foundations. The remaining work should focus on making the intended-vs-observed comparison useful at package and module seams rather than expanding the existing invariant checks.
+
+The primary users are reviewers and maintainers assessing architectural drift. The intended outcome is bounded architectural confidence: when architecture verification and tests pass, reviewers can operate at a higher abstraction level without inspecting every implementation line. This does not claim to prove behavioral correctness or eliminate all code review.
+
+The next slice will be deliberately sequenced:
+
+1. Define the observed-graph interface and a `dependency-cruiser` adapter.
+2. Add extraction diagnostics and mutation fixtures.
+3. Check forbidden sibling-package imports.
+4. Check forbidden package-to-host imports.
+5. Check cycles between architectural modules.
+6. Check selected required static dependencies.
+7. Compare those checks with LikeC4 relationships and metadata.
+8. Promote additional concrete patterns only when deterministic evidence exists.
+
+LikeC4 remains the authority for intended structure; executable rules express constraints; code analysis supplies observed facts. Continue using LikeC4, `rules.json`, `patterns.json`, and `decisions.json` before introducing any new generic architecture metadata format. A configured package without a canonical LikeC4 package element is a failure. A required relationship is a failure when its declared verification method has deterministic evidence (initially `verification: "static-dependency"`) and the observed dependency is absent; unsupported relationship types remain authored-only or `unknown`.
+
+A pattern is executable only when it has an explicit checker, scope or selector, deterministic evidence, a remediation message, and a regression fixture. Missing evidence remains `unknown`, never `pass` or `fail` by implication.
+
+The work must maintain a verification catalog documenting each check's purpose, scope, authority, evidence source, result semantics, limitations, and remediation guidance. Each executable checker requires a mutation test demonstrating a plausible violation.
+
 ## Trust defects to fix
 
 1. **Validation does not validate the canonical model.** The current `validateArchitecture()` path loads a legacy JSON projection, not `model.c4`. Invalid LikeC4 can coexist with six green validation rows.
@@ -107,3 +130,5 @@ This decision is complete when:
 10. The checker test suite mutates one fact per checker and asserts the expected failure.
 11. `bun test` passes.
 12. Documentation explains the intended-vs-observed graph model and how to interpret `unknown` results.
+13. A maintained verification catalog documents every executable check's purpose, scope, authority, evidence source, pass/fail/unknown semantics, limitations, and remediation guidance.
+14. The documented confidence boundary states that passing architecture verification plus tests provides bounded architectural confidence, not proof of behavioral correctness or a complete replacement for review.
