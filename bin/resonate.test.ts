@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { Writable } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { askToInstall, parseArgs, run, runFocusedPackageTest, selectMemberPackages, selectOptionalPackages } from './resonate';
 import { promisify } from 'node:util';
 
@@ -32,9 +32,37 @@ test('declining first-run installation leaves the repository untouched', async (
 
 test('first-run approval installs selected packages before starting', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); const openedUrls = []; const fakeServer = { address: () => ({ port: 4318 }) };
-  const server = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({ home: true, documentation: false }), startServerFn: async ({ config }) => { assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: () => {} });
+  const server = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({ home: true, documentation: false }), memberSourceFn: async () => '', confirmStartFn: async () => true, startServerFn: async ({ config }) => { assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); return fakeServer; }, openBrowserFn: (url) => openedUrls.push(url), log: () => {} });
   assert.equal(server, fakeServer); assert.deepEqual(openedUrls, ['http://127.0.0.1:4318']);
   const config = JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')); assert.deepEqual(Object.keys(config.packages), ['shell', 'home']); assert.equal(config.packages.home.source, 'README.md'); assert.equal(config.repository.name, path.basename(root)); assert.equal(config.repository.tagline, '');
+});
+
+test('first-run can register personal packages before optionally starting', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); const source = await mkdtemp(path.join(tmpdir(), 'resonance-member-source-')); const fakeServer = { address: () => ({ port: 4319 }) };
+  try {
+    await writeFile(path.join(source, 'member-packages.json'), JSON.stringify({ version: 1, packages: { personal: { module: 'src/packages/personal/index.ts' } } }));
+    const server = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({ home: false }), memberSourceFn: async () => source, selectMemberPackagesFn: async ({ manifest }) => { assert.ok(manifest.packages.personal); return { personal: {} }; }, confirmStartFn: async () => true, startServerFn: async () => fakeServer, openBrowserFn: () => {}, log: () => {} });
+    assert.equal(server, fakeServer);
+    const memberConfig = JSON.parse(await readFile(path.join(root, '.resonance/member-config.json'), 'utf8'));
+    assert.equal(memberConfig.source, await realpath(source)); assert.deepEqual(memberConfig.packages, { personal: {} });
+  } finally { await rm(root, { recursive: true, force: true }); await rm(source, { recursive: true, force: true }); }
+});
+
+test('first-run can finish without starting when startup is declined', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); let started = false;
+  try {
+    const result = await run([], { root, confirmInstallFn: async () => true, selectPackagesFn: async () => ({}), memberSourceFn: async () => '', confirmStartFn: async () => false, startServerFn: async () => { started = true; return null; }, log: () => {} });
+    assert.equal(result, null); assert.equal(started, false); assert.ok(await stat(path.join(root, '.resonance/config.json')));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('non-interactive first-run answers can install, skip personal packages, and start', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'resonance-cli-')); const input = new PassThrough(); input.isTTY = false; const output = new Writable({ write(_chunk, _encoding, callback) { callback(); } }); const fakeServer = { address: () => ({ port: 4320 }) };
+  try {
+    const resultPromise = run([], { root, input, output, startServerFn: async () => fakeServer, openBrowserFn: () => {}, log: () => {} });
+    input.end('y\nn\nn\nn\nn\nn\n\ny\n');
+    assert.equal(await resultPromise, fakeServer);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('startup scaffolds artifacts for configured Architecture and Backlog packages', async () => {

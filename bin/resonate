@@ -91,6 +91,17 @@ function askQuestion(prompt, question) {
   return new Promise((resolve) => prompt.question(question, resolve));
 }
 
+async function askText(question, { input = process.stdin, output = process.stdout, reader } = {}) {
+  if (!input.isTTY) {
+    const lineReader = reader || createInputLineReader(input);
+    output.write(question);
+    try { return (await lineReader.next()).trim(); } finally { if (!reader) lineReader.close(); }
+  }
+  const prompt = createInterface({ input, output });
+  try { return (await askQuestion(prompt, question)).trim(); }
+  finally { prompt.close(); input.resume?.(); }
+}
+
 function createInputLineReader(input) {
   let buffer = ''; let ended = false; const lines = []; const waiters = [];
   const deliver = () => { while (lines.length > 0 && waiters.length > 0) waiters.shift()(lines.shift()); };
@@ -100,15 +111,16 @@ function createInputLineReader(input) {
   return { next: () => { if (lines.length > 0) return Promise.resolve(lines.shift()); if (ended) return Promise.resolve(''); return new Promise((resolve) => waiters.push(resolve)); }, close: () => { input.off('data', onData); input.off('end', onEnd); } };
 }
 
-export async function askToInstall({ input = process.stdin, output = process.stdout } = {}) {
-  if (!input.isTTY) {
-    const reader = createInputLineReader(input);
-    output.write('Would you like to install Resonance in this repository? [y/N] ');
-    try { return /^(y|yes)$/i.test((await reader.next()).trim()); } finally { reader.close(); }
-  }
-  const prompt = createInterface({ input, output });
-  try { return /^(y|yes)$/i.test((await askQuestion(prompt, 'Would you like to install Resonance in this repository? [y/N] ')).trim()); }
-  finally { prompt.close(); input.resume?.(); }
+export async function askToInstall({ input = process.stdin, output = process.stdout, reader } = {}) {
+  return /^(y|yes)$/i.test(await askText('Would you like to install Resonance in this repository? [y/N] ', { input, output, reader }));
+}
+
+export async function askMemberSource({ input = process.stdin, output = process.stdout, reader } = {}) {
+  return askText('Path to your personal workspace repository (leave blank to skip): ', { input, output, reader });
+}
+
+export async function askToStart({ input = process.stdin, output = process.stdout, reader } = {}) {
+  return /^(y|yes)$/i.test(await askText('Start Resonate now? [y/N] ', { input, output, reader }));
 }
 
 const OPTIONAL_PACKAGES = [
@@ -119,12 +131,12 @@ const OPTIONAL_PACKAGES = [
   { id: 'doctor', label: 'Doctor' },
 ];
 
-export async function selectMemberPackages({ manifest, input = process.stdin, output = process.stdout } = {}) {
+export async function selectMemberPackages({ manifest, input = process.stdin, output = process.stdout, reader } = {}) {
   const packages = Object.entries(manifest.packages).map(([id, value]) => ({ id, label: value.label || id }));
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== 'function') {
-    const reader = createInputLineReader(input); const selected = {};
-    try { for (const item of packages) { output.write(`Install ${item.label}? [y/N] `); if (/^(y|yes)$/i.test((await reader.next()).trim())) selected[item.id] = {}; } return selected; }
-    finally { reader.close(); }
+    const lineReader = reader || createInputLineReader(input); const selected = {};
+    try { for (const item of packages) { output.write(`Install ${item.label}? [y/N] `); if (/^(y|yes)$/i.test((await lineReader.next()).trim())) selected[item.id] = {}; } return selected; }
+    finally { if (!reader) lineReader.close(); }
   }
   return new Promise((resolve) => {
     let cursor = 0; const selected = Object.fromEntries(packages.map((item) => [item.id, false])); let rendered = false; let inputBuffer = '';
@@ -139,18 +151,18 @@ function checkboxLines(cursor, selected) {
   return OPTIONAL_PACKAGES.map((item, index) => `${index === cursor ? '❯' : ' '} [${selected[item.id] ? 'x' : ' '}] ${item.label}`);
 }
 
-export async function selectOptionalPackages({ input = process.stdin, output = process.stdout } = {}) {
+export async function selectOptionalPackages({ input = process.stdin, output = process.stdout, reader } = {}) {
   output.write('Shell package is required and will always be installed.\n');
   if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== 'function') {
-    const reader = createInputLineReader(input);
+    const lineReader = reader || createInputLineReader(input);
     const selected = {};
     try {
       for (const item of OPTIONAL_PACKAGES) {
         output.write(`Install ${item.label} package? [y/N] `);
-        selected[item.id] = /^(y|yes)$/i.test((await reader.next()).trim());
+        selected[item.id] = /^(y|yes)$/i.test((await lineReader.next()).trim());
       }
       return selected;
-    } finally { reader.close(); }
+    } finally { if (!reader) lineReader.close(); }
   }
 
   return new Promise((resolve) => {
@@ -185,12 +197,12 @@ export async function selectOptionalPackages({ input = process.stdin, output = p
   });
 }
 
-export async function installRepository(root, { selectPackagesFn = selectOptionalPackages, log = console.log } = {}) {
+export async function installRepository(root, { selectPackagesFn = selectOptionalPackages, log = console.log, input = process.stdin, output = process.stdout, reader } = {}) {
   if (await repositoryConfigExists(root)) {
     log('Resonance is already installed in this repository.');
     return loadRepositoryConfig(root);
   }
-  const selection = await selectPackagesFn();
+  const selection = await selectPackagesFn({ input, output, reader });
   if (!selection) { log('Installation cancelled.'); return null; }
   await scaffoldRepositoryPackages(root, selection);
   const config = await writeRepositoryConfig(root, createRepositoryConfig({ ...selection, root }));
@@ -209,10 +221,10 @@ async function addMemberGitignore(root) {
   await writeFile(filename, `${lines.join('\\n')}\\n`, 'utf8');
 }
 
-export async function installMemberPackages(root, source, { selectPackagesFn = selectMemberPackages, log = console.log } = {}) {
+export async function installMemberPackages(root, source, { selectPackagesFn = selectMemberPackages, log = console.log, input = process.stdin, output = process.stdout, reader } = {}) {
   const memberRoot = await resolveMemberRepository(source);
   const manifest = await loadMemberManifest(memberRoot);
-  const selection = await selectPackagesFn({ manifest, source: memberRoot });
+  const selection = await selectPackagesFn({ manifest, source: memberRoot, input, output, reader });
   if (!selection) { log('Member package installation cancelled.'); return null; }
   const packages = Array.isArray(selection) ? Object.fromEntries(selection.map((id) => [id, {}])) : selection;
   const config = await writeMemberConfig(root, { version: 1, source: memberRoot, packages });
@@ -221,7 +233,7 @@ export async function installMemberPackages(root, source, { selectPackagesFn = s
   return config;
 }
 
-export async function run(argumentsList, { root = process.cwd(), appRoot = applicationRoot, startServerFn = startServer, openBrowserFn = openBrowser, log = console.log, isInstalledFn = repositoryConfigExists, confirmInstallFn = askToInstall, selectPackagesFn = selectOptionalPackages, selectMemberPackagesFn = selectMemberPackages, installMemberPackagesFn = installMemberPackages, createMemberRepositoryFn = createMemberRepository, planMemberRepositoryFn = planMemberRepository, planMemberPackageScaffoldFn = planMemberPackageScaffold, createMemberPackageScaffoldFn = createMemberPackageScaffold, loadConfigFn = loadRepositoryConfig, planPackageScaffoldFn = planPackageScaffold, createPackageScaffoldFn = createPackageScaffold, runFocusedTestFn = runFocusedPackageTest } = {}) {
+export async function run(argumentsList, { root = process.cwd(), input = process.stdin, output = process.stdout, appRoot = applicationRoot, startServerFn = startServer, openBrowserFn = openBrowser, log = console.log, isInstalledFn = repositoryConfigExists, confirmInstallFn = askToInstall, selectPackagesFn = selectOptionalPackages, memberSourceFn = askMemberSource, confirmStartFn = askToStart, selectMemberPackagesFn = selectMemberPackages, installMemberPackagesFn = installMemberPackages, createMemberRepositoryFn = createMemberRepository, planMemberRepositoryFn = planMemberRepository, planMemberPackageScaffoldFn = planMemberPackageScaffold, createMemberPackageScaffoldFn = createMemberPackageScaffold, loadConfigFn = loadRepositoryConfig, planPackageScaffoldFn = planPackageScaffold, createPackageScaffoldFn = createPackageScaffold, runFocusedTestFn = runFocusedPackageTest } = {}) {
   const options = parseArgs(argumentsList);
   if (options.help) { printHelp(log); return null; }
   if (options.command === 'install') { await installRepository(root, { selectPackagesFn, log }); return null; }
@@ -247,12 +259,20 @@ export async function run(argumentsList, { root = process.cwd(), appRoot = appli
     log('Full regression: bun test');
     return null;
   }
-  if (!await isInstalledFn(root)) {
-    log('Resonance is not installed in this repository.');
-    if (!await confirmInstallFn()) { log('Installation cancelled.'); return null; }
-    const installed = await installRepository(root, { selectPackagesFn, log });
-    if (!installed) return null;
-  }
+  const firstRun = !await isInstalledFn(root);
+  const reader = firstRun && !input.isTTY ? createInputLineReader(input) : undefined;
+  try {
+    if (firstRun) {
+      log('Resonance is not installed in this repository.');
+      if (!await confirmInstallFn({ input, output, reader })) { log('Installation cancelled.'); return null; }
+      if (!await installRepository(root, { selectPackagesFn, log, input, output, reader })) return null;
+      const memberSource = String(await memberSourceFn({ input, output, reader }) ?? '').trim();
+      if (memberSource) {
+        if (!await installMemberPackagesFn(root, memberSource, { selectPackagesFn: selectMemberPackagesFn, log, input, output, reader })) return null;
+      }
+      if (!await confirmStartFn({ input, output, reader })) return null;
+    }
+  } finally { reader?.close(); }
   const config = await loadConfigFn(root);
   await scaffoldRepositoryPackages(root, config.packages);
   const { command: _command, packageId: _packageId, ...serverOptions } = options;

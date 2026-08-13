@@ -1,5 +1,6 @@
 import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { MANIFEST_VERSION, type PackageConfig, type PackageInput } from './package-contract.ts';
 
@@ -14,8 +15,9 @@ export type MemberManifest = { version: typeof MANIFEST_VERSION; packages: Recor
 function isRecord(value: unknown): value is RecordValue { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 function toPath(value: string | URL): string { return value instanceof URL ? fileURLToPath(value) : value; }
 function absolutePath(value: string, source: string): string {
-  if (!value || !path.isAbsolute(value)) throw new Error(`${source}: source must be an absolute path.`);
-  return path.resolve(value);
+  const expanded = value === '~' ? homedir() : value.startsWith('~/') ? path.join(homedir(), value.slice(2)) : value;
+  if (!expanded || !path.isAbsolute(expanded)) throw new Error(`${source}: source must be an absolute path.`);
+  return path.resolve(expanded);
 }
 function validatePackages(value: unknown, source: string, allowModule: boolean): Record<string, PackageConfig> {
   if (!isRecord(value)) throw new Error(`${source}: packages must be an object.`);

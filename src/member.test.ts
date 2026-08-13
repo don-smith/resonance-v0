@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { createApp } from './server.ts';
-import { writeMemberConfig, validateMemberConfig, validateMemberManifest } from './member.ts';
+import { resolveMemberRepository, writeMemberConfig, validateMemberConfig, validateMemberManifest } from './member.ts';
 
 async function withServer(root: string, run: (base: string) => Promise<void>) {
   const server = await createApp({ root, config: { version: 1, packages: { shell: { module: 'src/packages/shell/index.ts' } } } });
@@ -16,6 +16,10 @@ async function withServer(root: string, run: (base: string) => Promise<void>) {
 test('validates member manifests and keeps module paths out of local selection', () => {
   assert.deepEqual(validateMemberManifest({ version: 1, packages: { personal: { module: 'src/packages/personal/index.ts' } } }).packages.personal.module, 'src/packages/personal/index.ts');
   assert.throws(() => validateMemberConfig({ version: 1, source: '/tmp/member', packages: { personal: { module: 'wrong.ts' } } }), /must not duplicate/);
+});
+
+test('resolves a tilde member source from the user home directory', async () => {
+  assert.equal(await resolveMemberRepository('~'), await realpath(homedir()));
 });
 
 test('loads a live external member package with member navigation and state', async () => {
