@@ -37,9 +37,9 @@ Home reads the configured source through the host repository-containment boundar
 
 ## Home onboarding Task
 
-When Home is configured with the default `README.md` source, or its configured source is missing or invalid, Home contributes `home:create-home-page` to Resonance Actions. The Task owns its bounded documentation discovery policy and excludes dependencies, generated directories, repository internals, credentials, and unreadable files. It prepares a Markdown preview with source-document links and affected paths, then requires explicit confirmation before atomically writing `.resonance/home.md` and updating the Home package source. Existing custom sources are never overwritten. Runtime validation re-reads the configured source through the same containment and rendering rules used by Home; completion is evidence-based and dismissal is stored separately in package state.
+When Home is configured with the default `README.md` source, or its configured source is missing or invalid, Home contributes `home:create-home-page` to Resonance Actions. The Task owns its bounded documentation discovery policy and excludes dependencies, generated directories, repository internals, credentials, and unreadable files. It prepares an HTML preview with subtle source-document references and affected paths, then requires explicit confirmation before atomically writing `.resonance/home.html` and updating the Home package source. Existing custom sources are never overwritten. Runtime validation re-reads the configured HTML source through the same containment rules used by Home; completion is evidence-based and dismissal is stored separately in package state.
 
-The Task uses the generic Resonance Actions session and exposes only its Home curation skill and operations. It does not receive shell, network, credentials, or unrestricted filesystem access.
+The Task uses the generic Resonance Actions session and exposes only its Home curation skill and operations. The skill is maintained at `skills/create-home-page/SKILL.md` beside the package implementation and is loaded as the Task's scoped guidance. It does not receive shell, network, credentials, or unrestricted filesystem access.
 
 ## Ownership boundary
 

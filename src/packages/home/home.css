@@ -5,6 +5,26 @@
 .home-body { min-height: 120px; }
 .home-loading, .home-error { color: var(--muted); font: 12px/1.5 var(--mono); }
 .home-error { color: var(--danger); }
+.repository-home { max-width: 960px; margin: 0 auto; padding: 72px 52px 104px; color: var(--ink); font-size: 18px; line-height: 1.7; }
+.repository-home .home-hero { max-width: 820px; padding-bottom: 54px; }
+.repository-home .home-kicker { margin: 0 0 22px; color: var(--accent); font: 600 11px/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.repository-home h1 { max-width: 820px; margin: 0 0 30px; color: var(--ink); font: 400 clamp(52px, 8vw, 112px)/.9 var(--display); letter-spacing: -.065em; }
+.repository-home .home-lead { max-width: 680px; margin: 0; color: var(--muted); font-size: clamp(21px, 2.4vw, 28px); line-height: 1.38; }
+.repository-home .home-meta { display: flex; flex-wrap: wrap; gap: 10px 28px; margin: 34px 0 0; color: var(--muted); font: 10px/1.5 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.repository-home .home-meta span:first-child { color: var(--accent); }
+.repository-home .home-rule { width: 52px; height: 2px; margin: 0 0 4px; background: var(--accent); }
+.repository-home .home-section { display: grid; grid-template-columns: minmax(120px, .32fr) minmax(0, 1fr); gap: 44px; padding: 48px 0 54px; border-top: 1px solid var(--line); }
+.repository-home .home-section-label { color: var(--accent); font: 600 10px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.repository-home h2 { max-width: 680px; margin: -8px 0 24px; color: var(--ink); font: 400 clamp(34px, 4.5vw, 60px)/.98 var(--display); letter-spacing: -.05em; }
+.repository-home h3 { max-width: 620px; margin: 34px 0 10px; color: var(--ink); font: 400 25px/1.1 var(--display); letter-spacing: -.025em; }
+.repository-home p { max-width: 710px; margin: 0 0 18px; }
+.repository-home blockquote { max-width: 680px; margin: 34px 0; padding: 24px 28px; border-left: 2px solid var(--accent); background: var(--paper-deep); color: var(--ink-soft); }
+.repository-home blockquote p { margin: 0; font: 400 clamp(23px, 3vw, 34px)/1.22 var(--display); letter-spacing: -.025em; }
+.repository-home blockquote cite { display: block; margin-top: 18px; color: var(--accent); font: 10px/1.4 var(--mono); font-style: normal; letter-spacing: .06em; text-transform: uppercase; }
+.repository-home .home-source { display: block; margin-top: 24px; color: var(--muted); font: 10px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.repository-home .home-closing { padding-top: 58px; border-top: 1px solid var(--line); text-align: center; }
+.repository-home .home-closing p { max-width: 720px; margin: 0 auto; font: 400 clamp(32px, 5vw, 64px)/.98 var(--display); letter-spacing: -.05em; }
+.repository-home .home-closing span { display: block; margin-top: 24px; color: var(--accent); font: 10px/1.4 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .welcome-line { display: flex; align-items: center; gap: 9px; margin-top: 52px; color: var(--muted); font: 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; }
 .signal-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-@media (max-width: 720px) { .home-content { padding: 48px 20px 72px; font-size: 17px; } }
+@media (max-width: 720px) { .home-content { padding: 48px 20px 72px; font-size: 17px; } .repository-home { padding: 48px 20px 72px; font-size: 17px; } .repository-home .home-section { display: block; padding: 36px 0 42px; } .repository-home .home-section-label { margin-bottom: 22px; } .repository-home h2 { margin-top: 0; } .repository-home blockquote { padding: 20px; } }

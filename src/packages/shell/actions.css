@@ -22,6 +22,9 @@
 .actions-preview { max-width: 800px; margin: 18px auto; padding: 18px 52px; border: 1px solid var(--line); background: var(--paper-deep); }
 .actions-preview h3 { margin: 0 0 8px; font: 20px var(--display); }
 .actions-preview p { color: var(--muted); font: 11px/1.5 var(--mono); }
+.actions-preview-frame { display: block; width: 100%; min-height: 520px; border: 1px solid var(--line); background: var(--paper); }
+.actions-preview details { margin-top: 12px; color: var(--muted); font: 11px var(--mono); }
+.actions-preview summary { cursor: pointer; }
 .actions-preview pre { max-height: 380px; overflow: auto; padding: 14px; background: var(--paper); color: var(--ink); white-space: pre-wrap; font: 11px/1.5 var(--mono); }
 .actions-validation { max-width: 800px; margin: 18px auto; padding: 12px 52px; color: var(--success); font: 11px var(--mono); }
 .actions-validation[data-valid="false"] { color: var(--danger); }

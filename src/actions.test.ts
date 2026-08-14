@@ -66,8 +66,12 @@ test('Home Task excludes ignored documentation and applies a valid configured so
     const state = responseCapture(); await registry.routes['GET /api/actions/state'].handler(request('/api/actions/state?task=home%3Acreate-home-page'), state.response, registry.context);
     const confirmation = state.read().body.pendingConfirmation.id;
     const applied = responseCapture(); await registry.routes['POST /api/actions/confirm'].handler(request('/api/actions/confirm', { taskId: 'home:create-home-page', confirmationId: confirmation }), applied.response, registry.context);
-    assert.match(await readFile(path.join(root, '.resonance/home.md'), 'utf8'), /docs\/guide/);
-    assert.equal(JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')).packages.home.source, '.resonance/home.md');
+    const generated = await readFile(path.join(root, '.resonance/home.html'), 'utf8');
+    assert.match(generated, /<h1[^>]*>[^<]+<\/h1>/);
+    assert.match(generated, /<blockquote>/);
+    assert.match(generated, /class="home-hero"/);
+    assert.match(generated, /docs\/guide/);
+    assert.equal(JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')).packages.home.source, '.resonance/home.html');
     await registry.dispose();
   } finally { await rm(root, { recursive: true, force: true }); }
 });

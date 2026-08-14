@@ -1,4 +1,5 @@
 import { readFile, rename, writeFile, mkdir, unlink, lstat } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { discoverMarkdownFiles } from '../../content.ts';
 import { validateRepositoryConfig } from '../../config.ts';
@@ -6,7 +7,8 @@ import type { RepositoryConfig } from '../../package-contract.ts';
 import type { HostContext, PackageInput, TaskContribution, TaskPreview } from '../../package-contract.ts';
 import { homeInput } from './home-source.ts';
 
-const TARGET_SOURCE = '.resonance/home.md';
+const TARGET_SOURCE = '.resonance/home.html';
+const skillContent = readFileSync(new URL('./skills/create-home-page/SKILL.md', import.meta.url), 'utf8');
 const MAX_DOCUMENTS = 40;
 const MAX_DOCUMENT_BYTES = 8 * 1024;
 const MAX_PROPOSAL_BYTES = 48 * 1024;
@@ -47,14 +49,52 @@ async function documentationEvidence(context: HostContext): Promise<Array<{ path
   }
   return evidence;
 }
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+function readableExcerpt(value: string, fallback: string): string {
+  const text = value.replace(/```[\s\S]*?```/g, '').replace(/^#{1,6}\s*/gm, '').replace(/^[-*+]\s+/gm, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim();
+  return (text || fallback).slice(0, 420).trim();
+}
+function sourceFor(evidence: Array<{ path: string; excerpt: string }>, preferred: string[], fallbackIndex = 0): { path: string; excerpt: string } {
+  return evidence.find((item) => preferred.includes(item.path.toLowerCase())) || evidence[fallbackIndex] || evidence[0] || { path: 'repository documentation', excerpt: 'The repository documentation is the source for this project overview.' };
+}
 function proposal(repositoryName: string, evidence: Array<{ path: string; excerpt: string }>): string {
-  const lines = [`# ${repositoryName}`, '', 'This landing page was prepared from repository documentation. Claims are linked to their source documents.', ''];
-  if (!evidence.length) lines.push('No readable Markdown documentation was found yet.', '');
-  else {
-    lines.push('## Documentation', '');
-    for (const item of evidence) lines.push(`### [${item.path}](${item.path})`, '', item.excerpt, '');
-  }
-  return `${lines.join('\n').slice(0, MAX_PROPOSAL_BYTES)}\n`;
+  const readme = sourceFor(evidence, ['readme.md', 'readme.markdown']);
+  const usage = sourceFor(evidence, ['docs/using-resonance.md', 'docs/usage.md', 'docs/getting-started.md', 'getting-started.md'], 1);
+  const architecture = sourceFor(evidence, ['docs/architecture.md', 'architecture.md', 'docs/design.md'], 2);
+  const project = escapeHtml(readableExcerpt(readme.excerpt, 'A project with a clear point of view, captured in its repository documentation.'));
+  const use = escapeHtml(readableExcerpt(usage.excerpt, 'Start with the documented workflow, then make the project your own.'));
+  const strengths = escapeHtml(readableExcerpt(architecture.excerpt, 'The project brings its important ideas into view so they can be understood and improved.'));
+  const quote = escapeHtml(readableExcerpt(readme.excerpt, 'Good software becomes easier to care about when its purpose is visible.'));
+  const source = (item: { path: string }) => `<span class="home-source">Source: ${escapeHtml(item.path)}</span>`;
+  const html = `<section class="repository-home" aria-labelledby="repository-home-title">
+  <header class="home-hero">
+    <p class="home-kicker">PROJECT / ${escapeHtml(repositoryName)}</p>
+    <h1 id="repository-home-title">${escapeHtml(repositoryName)}</h1>
+    <p class="home-lead">${project}</p>
+    <p class="home-meta"><span>Built with intention</span><span>Grounded in the repository</span></p>
+  </header>
+  <div class="home-rule" aria-hidden="true"></div>
+  <section class="home-section" aria-labelledby="home-purpose-title">
+    <div class="home-section-label">01 / The point</div>
+    <div><h2 id="home-purpose-title">A project with something to say.</h2><p>${project}</p>${source(readme)}</div>
+  </section>
+  <section class="home-section" aria-labelledby="home-audience-title">
+    <div class="home-section-label">02 / The people</div>
+    <div><h2 id="home-audience-title">For the people close to the work.</h2><p>This is for the people who need to understand a project, make a good change, and remember why the change matters.</p><p>The repository keeps the useful context close: enough to orient a newcomer, and enough to help a team make its next decision with confidence.</p></div>
+  </section>
+  <section class="home-section" aria-labelledby="home-use-title">
+    <div class="home-section-label">03 / The practice</div>
+    <div><h2 id="home-use-title">Useful because it is made to be used.</h2><p>${use}</p><h3>Find the shortest path in.</h3><p>${escapeHtml(readableExcerpt(usage.excerpt, 'Read the getting-started guidance, try the core workflow, and let the project reveal its shape through use.'))}</p>${source(usage)}</div>
+  </section>
+  <section class="home-section" aria-labelledby="home-strength-title">
+    <div class="home-section-label">04 / The character</div>
+    <div><h2 id="home-strength-title">The details are part of the promise.</h2><p>${strengths}</p><blockquote><p>“${quote}”</p><cite>${source(readme).replace('Source:', 'From')}</cite></blockquote><h3>Make the important things visible.</h3><p>This page is a small reminder that the work is worth understanding, shaping, and sharing.</p>${source(architecture)}</div>
+  </section>
+  <section class="home-closing" aria-label="Closing statement"><p>Good work feels better when its purpose is close at hand.</p><span>${escapeHtml(repositoryName)} / keep building</span></section>
+</section>`;
+  return html.slice(0, MAX_PROPOSAL_BYTES);
 }
 async function atomicWrite(filename: string, contents: string): Promise<void> {
   await mkdir(path.dirname(filename), { recursive: true });
@@ -77,7 +117,8 @@ export function createHomeTask(context: HostContext, input: PackageInput, { onSo
   };
   return {
     id: 'create-home-page', category: 'onboarding', label: 'Create Home page', description: 'Read bounded repository documentation and prepare a curated landing page.',
-    skills: [{ id: 'home-page', name: 'Home page curation', content: 'Use only bounded repository documentation as evidence. Distinguish facts from recommendations and identify source documents.' }],
+    instructions: 'Read /skills/create-home-page/SKILL.md before preparing a Home page. The result must be engaging, intentional HTML rather than a documentation index or chat transcript.',
+    skills: [{ id: 'create-home-page', name: 'Create Home page', content: skillContent }],
     operations: [{ id: 'inspect-documentation', description: 'Read contained Markdown documentation while excluding dependencies, generated content, credentials, and repository internals.' }, { id: 'apply-home-page', description: 'Atomically write the repository-owned Home source and update Home configuration after confirmation.' }],
     async evaluate() {
       const home = await current(); const state = await readState(); const evidenceKey = (await documentationPaths(context)).join('|'); const dismissed = state.dismissedSignature === signature(home.source, home.valid, evidenceKey);
