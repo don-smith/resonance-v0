@@ -64,11 +64,14 @@ export type TaskEvaluation = {
 };
 export type TaskSkill = { id: string; name: string; content: string };
 export type TaskOperation = { id: string; description: string };
+export type TaskStart = { label: string; prompt: string };
 export type TaskPreview = {
   id: string;
   title: string;
   summary?: string;
   content?: string;
+  contentType?: 'text' | 'html';
+  stylesheet?: string;
   affectedPaths: string[];
   configuration?: unknown;
   requiresConfirmation: boolean;
@@ -92,6 +95,8 @@ export type TaskContribution = {
   description: string;
   skills?: readonly TaskSkill[];
   operations?: readonly TaskOperation[];
+  start?: TaskStart;
+  completedUrl?: string;
   instructions?: string;
   evaluate(): Promise<TaskEvaluation>;
   createAgent?(scope: { signal: AbortSignal; emit(update: TaskUpdate): void; skills: readonly TaskSkill[]; operations: readonly TaskOperation[]; instructions?: string }): Promise<TaskAgent>;

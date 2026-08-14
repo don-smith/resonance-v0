@@ -22,7 +22,7 @@ function packageWithTask(task: TaskContribution): PackageDefinition {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-actions-'));
   let applied = false;
   const task: TaskContribution = {
-    id: 'prepare-repository', category: 'onboarding', label: 'Prepare repository', description: 'Prepare the fixture.',
+    id: 'prepare-repository', category: 'onboarding', label: 'Prepare repository', description: 'Prepare the fixture.', completedUrl: '/done',
     async evaluate() { return { status: applied ? 'complete' : 'available', summary: 'Fixture task.' }; },
     async prepare() { return { id: 'preview-1', title: 'Fixture preview', content: 'No mutation yet', affectedPaths: ['fixture.txt'], requiresConfirmation: true }; },
     async apply() { applied = true; return { message: 'Applied', affectedPaths: ['fixture.txt'] }; },
@@ -33,6 +33,7 @@ function packageWithTask(task: TaskContribution): PackageDefinition {
     assert.equal(registry.manifest.actions?.tasks, '/api/actions/tasks');
     const list = responseCapture(); await registry.routes['GET /api/actions/tasks'].handler(request('/api/actions/tasks'), list.response, registry.context);
     assert.equal(list.read().body.tasks[0].id, 'tasks:prepare-repository');
+    assert.equal(list.read().body.tasks[0].completedUrl, '/done');
     const prompt = responseCapture(); await registry.routes['POST /api/actions/prompt'].handler(request('/api/actions/prompt', { taskId: 'tasks:prepare-repository', prompt: 'Prepare it' }), prompt.response, registry.context);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(applied, false);
@@ -48,6 +49,18 @@ function packageWithTask(task: TaskContribution): PackageDefinition {
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('rejects rich previews that reference an unregistered package asset', async () => {
+  const task: TaskContribution = {
+    id: 'invalid-preview', category: 'maintenance', label: 'Invalid preview', description: 'Fixture task.',
+    async evaluate() { return { status: 'available' }; },
+    async prepare() { return { id: 'preview-1', title: 'Invalid preview', content: '<h1>Preview</h1>', contentType: 'html', stylesheet: '/assets/tasks/missing.css', affectedPaths: [], requiresConfirmation: true }; },
+  };
+  const registry = createHost({ config: { version: 1, packages: { tasks: { module: 'test.ts' } } }, packages: [packageWithTask(task)] });
+  const response = responseCapture(); await registry.routes['POST /api/actions/preview'].handler(request('/api/actions/preview', { taskId: 'tasks:invalid-preview' }), response.response, registry.context);
+  assert.equal(response.read().status, 422);
+  await registry.dispose();
+});
+
 test('Home Task excludes ignored documentation and applies a valid configured source', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'resonance-home-task-'));
   try {
@@ -58,19 +71,30 @@ test('Home Task excludes ignored documentation and applies a valid configured so
     await writeFile(path.join(root, 'README.md'), '# Repository\n\nThe README is evidence.');
     await writeFile(path.join(root, 'docs/guide.md'), '# Guide\n\nA guide.');
     await writeFile(path.join(root, 'node_modules/ignored.md'), '# Ignore');
-    const { homePackage } = await import('./packages/home/index.ts');
+    const { createHomePackage } = await import('./packages/home/index.ts');
+    let agentOptions;
+    const homePackage = createHomePackage({
+      credentialProvider: async () => 'test-key',
+      runtimeFactory: async (options) => {
+        agentOptions = options;
+        return { async *prompt() { yield { kind: 'preview', preview: await options.preview('<section class="repository-home"><header class="home-hero"><h1>Repository</h1><p>A focused tool for useful work.</p></header><blockquote>Make the important things visible.</blockquote></section>') }; } };
+      },
+    });
     const registry = createHost({ root, appRoot: path.resolve('.'), config: { version: 1, packages: { home: { module: 'src/packages/home/index.ts', source: 'README.md' } } }, packages: [homePackage] });
-    const list = responseCapture(); await registry.routes['GET /api/actions/tasks'].handler(request('/api/actions/tasks'), list.response, registry.context); assert.equal(list.read().body.tasks.length, 1);
-    const preview = responseCapture(); await registry.routes['POST /api/actions/preview'].handler(request('/api/actions/preview', { taskId: 'home:create-home-page' }), preview.response, registry.context);
-    const proposal = preview.read().body; assert.match(proposal.content, /docs\/guide\.md/); assert.doesNotMatch(proposal.content, /node_modules/);
+    const list = responseCapture(); await registry.routes['GET /api/actions/tasks'].handler(request('/api/actions/tasks'), list.response, registry.context); assert.equal(list.read().body.tasks.length, 1); assert.equal(list.read().body.tasks[0].completedUrl, '/');
+    const prompt = responseCapture(); await registry.routes['POST /api/actions/prompt'].handler(request('/api/actions/prompt', { taskId: 'home:create-home-page', prompt: 'Create the page.' }), prompt.response, registry.context);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.match(agentOptions.skill, /not a documentation index/);
+    assert.deepEqual(agentOptions.documents.map((document) => document.path), ['README.md', 'docs/guide.md']);
     const state = responseCapture(); await registry.routes['GET /api/actions/state'].handler(request('/api/actions/state?task=home%3Acreate-home-page'), state.response, registry.context);
+    const proposal = state.read().body.preview; assert.equal(proposal.contentType, 'html'); assert.equal(proposal.stylesheet, '/assets/home/home.css'); assert.doesNotMatch(proposal.content, /docs\/guide\.md|node_modules|Source:|Author:/i);
     const confirmation = state.read().body.pendingConfirmation.id;
     const applied = responseCapture(); await registry.routes['POST /api/actions/confirm'].handler(request('/api/actions/confirm', { taskId: 'home:create-home-page', confirmationId: confirmation }), applied.response, registry.context);
     const generated = await readFile(path.join(root, '.resonance/home.html'), 'utf8');
     assert.match(generated, /<h1[^>]*>[^<]+<\/h1>/);
     assert.match(generated, /<blockquote>/);
     assert.match(generated, /class="home-hero"/);
-    assert.match(generated, /docs\/guide/);
+    assert.doesNotMatch(generated, /docs\/guide|node_modules|Source:|Author:/i);
     assert.equal(JSON.parse(await readFile(path.join(root, '.resonance/config.json'), 'utf8')).packages.home.source, '.resonance/home.html');
     await registry.dispose();
   } finally { await rm(root, { recursive: true, force: true }); }

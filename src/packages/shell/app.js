@@ -143,7 +143,11 @@ export async function startApplication({ documentRoot = document, windowRoot = g
       const factory = loaded.default;
       if (typeof factory !== 'function') throw new Error('Invalid Resonance Actions browser module.');
       const actionRoot = shell.createMount('resonance-actions');
-      actions = factory({ fetchFn, eventSourceFactory, initialTasks: actionItems, onTasksChanged: (nextTasks) => { actionItems = nextTasks; shell.renderNavigation(workspaceNavigation, actionItems); } });
+      const onCompleted = async (url) => {
+        if (url === '/' && homeId) return shell.activate(homeId);
+        if (windowRoot?.location?.assign) windowRoot.location.assign(url);
+      };
+      actions = factory({ fetchFn, eventSourceFactory, initialTasks: actionItems, onCompleted, onTasksChanged: (nextTasks) => { actionItems = nextTasks; shell.renderNavigation(workspaceNavigation, actionItems); } });
       actions.mount(actionRoot);
       shell.setActions(actions);
       shell.registerPackage('resonance-actions', actions);

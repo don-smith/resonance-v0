@@ -150,7 +150,7 @@ export function createHost({ root = process.cwd(), appRoot = process.cwd(), conf
   const navigation = Object.freeze([...mutable.navigation].sort((left, right) => left.order - right.order || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)).map((item) => Object.freeze({ ...item })));
   const packageManifest = Object.freeze(mutable.packages.map((item) => Object.freeze({ ...item })));
   const packageDiagnostics = Object.freeze(mutable.diagnostics.map((item) => Object.freeze({ ...item })));
-  const actionManager = new ActionManager(new Map(mutable.tasks.map((task) => [task.id, task])));
+  const actionManager = new ActionManager(new Map(mutable.tasks.map((task) => [task.id, task])), mutable.assets);
   if (mutable.tasks.length) for (const contribution of actionManager.routes()) {
     const key = routeKey(contribution.method, contribution.path);
     if (mutable.routes[key]) throw new Error(`Reserved Resonance Actions route is already registered: ${contribution.path}`);

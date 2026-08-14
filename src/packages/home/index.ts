@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { readMarkdown } from '../../content.ts';
 import { createMarkdownRenderer } from '../../markdown.ts';
-import { createHomeTask } from './home-task.ts';
+import { createHomeTask, type HomeTaskOptions } from './home-task.ts';
 import { homeInput } from './home-source.ts';
 export { homeInput } from './home-source.ts';
 import type { HostContext, PackageDefinition, PackageInput, PackageRegistration } from '../../package-contract.ts';
@@ -34,7 +34,7 @@ function createHomeHandler(source: () => string) {
   };
 }
 
-function register(context: HostContext, input: PackageInput): PackageRegistration {
+function register(context: HostContext, input: PackageInput, options: Pick<HomeTaskOptions, 'runtimeFactory' | 'credentialProvider'> = {}): PackageRegistration {
   const { source } = homeInput(input);
   let configuredSource = source;
   return {
@@ -46,9 +46,13 @@ function register(context: HostContext, input: PackageInput): PackageRegistratio
     ],
     navigation: [],
     browser: { id: 'home', entry: '/assets/home/home.js', stylesheet: '/assets/home/home.css' },
-    tasks: [createHomeTask(context, input, { onSourceChanged: (source) => { configuredSource = source; } })],
+    tasks: [createHomeTask(context, input, { ...options, onSourceChanged: (source) => { configuredSource = source; } })],
   };
 }
 
-export const homePackage: PackageDefinition = { metadata, register };
+export function createHomePackage(options: Pick<HomeTaskOptions, 'runtimeFactory' | 'credentialProvider'> = {}): PackageDefinition {
+  return { metadata, register: (context, input) => register(context, input, options) };
+}
+
+export const homePackage: PackageDefinition = createHomePackage();
 export default homePackage;

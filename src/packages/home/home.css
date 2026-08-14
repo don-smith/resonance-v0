@@ -14,6 +14,8 @@
 .repository-home .home-meta span:first-child { color: var(--accent); }
 .repository-home .home-rule { width: 52px; height: 2px; margin: 0 0 4px; background: var(--accent); }
 .repository-home .home-section { display: grid; grid-template-columns: minmax(120px, .32fr) minmax(0, 1fr); gap: 44px; padding: 48px 0 54px; border-top: 1px solid var(--line); }
+.repository-home .home-section > .home-section-label { grid-column: 1; grid-row: 1; }
+.repository-home .home-section > :not(.home-section-label) { grid-column: 2; }
 .repository-home .home-section-label { color: var(--accent); font: 600 10px/1.4 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .repository-home h2 { max-width: 680px; margin: -8px 0 24px; color: var(--ink); font: 400 clamp(34px, 4.5vw, 60px)/.98 var(--display); letter-spacing: -.05em; }
 .repository-home h3 { max-width: 620px; margin: 34px 0 10px; color: var(--ink); font: 400 25px/1.1 var(--display); letter-spacing: -.025em; }

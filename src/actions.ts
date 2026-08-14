@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { HostContext, HostRequest, HostResponse, PackageMetadata, TaskContribution, TaskEvaluation, TaskPreview, TaskResult, TaskStatus, TaskUpdate, TaskValidation } from './package-contract.ts';
+import type { AssetContribution, HostContext, HostRequest, HostResponse, PackageMetadata, TaskContribution, TaskEvaluation, TaskPreview, TaskResult, TaskStatus, TaskUpdate, TaskValidation } from './package-contract.ts';
 
 export type ActionTask = { id: string; packageId: string; packageLabel: string; task: TaskContribution; context: HostContext };
 type ActionMessage = { id: string; role: 'user' | 'assistant'; content: string };
@@ -49,10 +49,14 @@ class ActionError extends Error { constructor(public readonly status: number, me
 
 export class ActionManager {
   private readonly tasks: ReadonlyMap<string, ActionTask>;
+  private readonly assets: Readonly<Record<string, AssetContribution>>;
   private readonly states = new Map<string, ActionState>();
   private disposed = false;
 
-  constructor(tasks: Map<string, ActionTask>) { this.tasks = tasks; }
+  constructor(tasks: Map<string, ActionTask>, assets: Readonly<Record<string, AssetContribution>> = {}) {
+    this.tasks = tasks;
+    this.assets = assets;
+  }
 
   private state(taskId: string): ActionState {
     let state = this.states.get(taskId);
@@ -67,6 +71,14 @@ export class ActionManager {
     if (!task) throw new ActionError(404, 'Task not found.');
     return task;
   }
+  private validatePreview(entry: ActionTask, value: TaskPreview): TaskPreview {
+    if (value.contentType !== undefined && value.contentType !== 'text' && value.contentType !== 'html') throw new ActionError(422, 'Task preview contentType must be text or html.');
+    if (value.stylesheet !== undefined) {
+      const expectedPrefix = `/assets/${entry.packageId}/`;
+      if (typeof value.stylesheet !== 'string' || value.contentType !== 'html' || !value.stylesheet.startsWith(expectedPrefix) || value.stylesheet.includes('?') || value.stylesheet.includes('#') || /[\\\\]/.test(value.stylesheet) || !this.assets[value.stylesheet]) throw new ActionError(422, 'Task preview stylesheet must be a registered asset owned by the contributing package.');
+    }
+    return value;
+  }
   private emit(taskId: string, event: ActionEvent): void { const state = this.state(taskId); state.listeners.forEach((listener) => listener(event)); }
   private async evaluate(entry: ActionTask): Promise<TaskEvaluation> {
     try {
@@ -80,7 +92,7 @@ export class ActionManager {
   }
   private async publicTask(entry: ActionTask) {
     const evaluation = await this.evaluate(entry);
-    return { id: entry.id, packageId: entry.packageId, packageLabel: entry.packageLabel, category: entry.task.category, label: entry.task.label, description: entry.task.description, ...evaluation };
+    return { id: entry.id, packageId: entry.packageId, packageLabel: entry.packageLabel, category: entry.task.category, label: entry.task.label, description: entry.task.description, ...(entry.task.start ? { start: { ...entry.task.start } } : {}), ...(entry.task.completedUrl ? { completedUrl: entry.task.completedUrl } : {}), ...evaluation };
   }
   async list(): Promise<unknown[]> {
     const result = [];
@@ -93,7 +105,7 @@ export class ActionManager {
   async detail(taskId: string): Promise<unknown> {
     const entry = this.task(taskId);
     const evaluation = await this.publicTask(entry);
-    return { ...evaluation, skills: (entry.task.skills || []).map(({ id, name }) => ({ id, name })), operations: entry.task.operations || [] };
+    return { ...evaluation, ...(entry.task.start ? { start: { ...entry.task.start } } : {}), ...(entry.task.completedUrl ? { completedUrl: entry.task.completedUrl } : {}), skills: (entry.task.skills || []).map(({ id, name }) => ({ id, name })), operations: entry.task.operations || [] };
   }
   snapshot(taskId: string): ActionSnapshot {
     const state = this.state(taskId);
@@ -107,7 +119,7 @@ export class ActionManager {
     const user = { id: messageId(), role: 'user' as const, content: prompt }; state.messages.push(user); this.emit(taskId, { type: 'message', message: user }); this.emit(taskId, { type: 'status', status: state.status });
     try {
       if (entry.task.prepare) {
-        const preview = await entry.task.prepare({ prompt, signal: controller.signal });
+        const preview = this.validatePreview(entry, await entry.task.prepare({ prompt, signal: controller.signal }));
         if (controller.signal.aborted) { state.status = 'available'; this.emit(taskId, { type: 'stopped' }); this.emit(taskId, { type: 'status', status: state.status }); return; }
         state.preview = preview; state.pendingConfirmation = { id: randomUUID(), preview }; const assistant = { id: messageId(), role: 'assistant' as const, content: preview.summary || 'A proposal is ready for your review.' }; state.messages.push(assistant);
         this.emit(taskId, { type: 'message', message: assistant }); this.emit(taskId, { type: 'preview', preview }); this.emit(taskId, { type: 'confirmation-required', confirmation: state.pendingConfirmation });
@@ -125,7 +137,7 @@ export class ActionManager {
   }
   private applyUpdate(taskId: string, update: TaskUpdate): void {
     const state = this.state(taskId);
-    if (update.kind === 'preview') { state.preview = update.preview; state.pendingConfirmation = { id: randomUUID(), preview: update.preview }; this.emit(taskId, { type: 'preview', preview: update.preview }); this.emit(taskId, { type: 'confirmation-required', confirmation: state.pendingConfirmation }); return; }
+    if (update.kind === 'preview') { const preview = this.validatePreview(this.task(taskId), update.preview); state.preview = preview; state.pendingConfirmation = { id: randomUUID(), preview }; this.emit(taskId, { type: 'preview', preview }); this.emit(taskId, { type: 'confirmation-required', confirmation: state.pendingConfirmation }); return; }
     if (update.kind === 'validation') { state.validation = update.validation; this.emit(taskId, { type: 'validation', validation: update.validation }); return; }
     if (update.kind === 'status') { state.status = update.status; this.emit(taskId, { type: 'status', status: update.status }); return; }
     if (!update.text) return;
@@ -137,7 +149,7 @@ export class ActionManager {
   async preview(taskId: string): Promise<TaskPreview> {
     const entry = this.task(taskId);
     if (!entry.task.prepare) throw new ActionError(409, 'This Task does not provide a preview.');
-    const preview = await entry.task.prepare({ prompt: 'Prepare the proposed Task changes.', signal: new AbortController().signal });
+    const preview = this.validatePreview(entry, await entry.task.prepare({ prompt: 'Prepare the proposed Task changes.', signal: new AbortController().signal }));
     const state = this.state(taskId); state.preview = preview; state.pendingConfirmation = { id: randomUUID(), preview };
     this.emit(taskId, { type: 'preview', preview }); this.emit(taskId, { type: 'confirmation-required', confirmation: state.pendingConfirmation });
     return preview;
@@ -183,6 +195,8 @@ export function isValidTask(value: unknown): value is TaskContribution {
   if (typeof task.id !== 'string' || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(task.id) || typeof task.category !== 'string' || !task.category || typeof task.label !== 'string' || !task.label.trim() || typeof task.description !== 'string' || !task.description.trim() || typeof task.evaluate !== 'function') return false;
   if (task.skills !== undefined && (!Array.isArray(task.skills) || task.skills.some((skill) => !skill || typeof skill.id !== 'string' || !skill.id || typeof skill.name !== 'string' || !skill.name || typeof skill.content !== 'string') || new Set(task.skills.map((skill) => skill.id)).size !== task.skills.length)) return false;
   if (task.operations !== undefined && (!Array.isArray(task.operations) || task.operations.some((operation) => !operation || typeof operation.id !== 'string' || !operation.id || typeof operation.description !== 'string' || !operation.description) || new Set(task.operations.map((operation) => operation.id)).size !== task.operations.length)) return false;
+  if (task.start !== undefined && (!task.start || typeof task.start.label !== 'string' || !task.start.label.trim() || typeof task.start.prompt !== 'string' || !task.start.prompt.trim())) return false;
+  if (task.completedUrl !== undefined && (typeof task.completedUrl !== 'string' || !task.completedUrl.trim())) return false;
   return (task.createAgent === undefined || typeof task.createAgent === 'function') && (task.prepare === undefined || typeof task.prepare === 'function') && (task.apply === undefined || typeof task.apply === 'function') && (task.validate === undefined || typeof task.validate === 'function') && (task.dismiss === undefined || typeof task.dismiss === 'function');
 }
 export function isTaskTerminal(status: TaskStatus): boolean { return terminalStatuses.has(status); }

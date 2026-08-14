@@ -47,7 +47,7 @@ The configured module must load successfully and default-export the Shell packag
 - `theme-bootstrap.js` — synchronous persisted-theme bootstrap that runs before the shared stylesheet to avoid a mismatched first paint.
 - `app.js` — browser coordinator, theme controller, and manifest bootstrap.
 - `shell.js` — navigation, mount creation, activation, and rollback behavior.
-- `actions.js` / `actions.css` — the shared Task conversation, preview, confirmation, cancellation, and dismissal surface.
+- `actions.js` / `actions.css` — the shared Task conversation, preview, confirmation, cancellation, dismissal, and completion-navigation surface. Text previews remain literal by default; package-owned HTML previews may provide a registered package stylesheet and are rendered in a sandboxed frame with Shell's theme tokens.
 - `styles.css` — shared design tokens and Shell layout.
 - `index.ts` — Shell route-free registration and compatibility assets.
 

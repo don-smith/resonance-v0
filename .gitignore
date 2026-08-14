@@ -2,6 +2,7 @@
 node_modules/
 .myflow/
 .resonance/backlog-agent.env
+.resonance/home-agent.env
 .resonance/documentation-agent.env
 .resonance/architecture-agent.env
 .resonance/doctor-agent.env
