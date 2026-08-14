@@ -7,6 +7,7 @@ import { MANIFEST_VERSION } from './package-contract.ts';
 import { createTelemetry } from './telemetry.ts';
 import { defaultRepositoryConfig } from './config.ts';
 import { createPackageState, validatePackageState } from './state.ts';
+import { ActionManager, createActionTask, isValidTask, type ActionTask } from './actions.ts';
 
 function toPath(value: string | URL): string { return value instanceof URL ? fileURLToPath(value) : value; }
 function createContext(repositoryRoot: string, appRoot: string, telemetry: Telemetry): HostContext {
@@ -42,6 +43,7 @@ function assertAssetFile(file: string, root: string): void {
 function assertRoutePath(pathname: string, packageId: string): void {
   assertPath(pathname, 'Route');
   if (pathname === '/api/manifest') throw new Error('The host manifest path is reserved.');
+  if (pathname === '/api/actions' || pathname.startsWith('/api/actions/')) throw new Error('The Resonance Actions path is reserved.');
   const namespaced = pathname === `/api/${packageId}` || pathname.startsWith(`/api/${packageId}/`);
   if (!namespaced) throw new Error(`Route path must be namespaced for package ${packageId}: ${pathname}`);
 }
@@ -65,9 +67,9 @@ function isPackageRegistration(value: unknown): value is PackageRegistration {
 }
 export function routeKey(method: HttpMethod, pathname: string): string { return `${method} ${pathname}`; }
 export type PackageDiagnostic = { scope: 'member'; id: string; status: 'disabled' | 'failed'; message: string };
-export type HostManifest = { version: typeof MANIFEST_VERSION; repository: RepositoryPresentation; runtime: { version?: string }; navigation: readonly NavigationContribution[]; packages: readonly BrowserContribution[]; diagnostics?: readonly PackageDiagnostic[] };
+export type HostManifest = { version: typeof MANIFEST_VERSION; repository: RepositoryPresentation; runtime: { version?: string }; navigation: readonly NavigationContribution[]; packages: readonly BrowserContribution[]; actions?: { tasks: string }; diagnostics?: readonly PackageDiagnostic[] };
 export type HostRegistry = { readonly context: HostContext; readonly routes: Readonly<Record<string, RouteContribution>>; readonly assets: Readonly<Record<string, AssetContribution>>; readonly manifest: HostManifest; dispose(): Promise<void> };
-type MutableRegistry = { context: HostContext; routes: Record<string, RouteContribution>; assets: Record<string, AssetContribution>; navigation: NavigationContribution[]; packages: BrowserContribution[]; disposers: Array<() => void | Promise<void>>; diagnostics: PackageDiagnostic[] };
+type MutableRegistry = { context: HostContext; routes: Record<string, RouteContribution>; assets: Record<string, AssetContribution>; navigation: NavigationContribution[]; packages: BrowserContribution[]; tasks: ActionTask[]; disposers: Array<() => void | Promise<void>>; diagnostics: PackageDiagnostic[] };
 function addRegistration(registry: MutableRegistry, registration: PackageRegistration, seenPackages: Set<string>, packageRoot: string, scope: 'team' | 'member', packageContext: HostContext): void {
   const next: MutableRegistry = {
     context: registry.context,
@@ -75,6 +77,7 @@ function addRegistration(registry: MutableRegistry, registration: PackageRegistr
     assets: { ...registry.assets },
     navigation: [...registry.navigation],
     packages: [...registry.packages],
+    tasks: [...registry.tasks],
     disposers: [...registry.disposers],
     diagnostics: [...registry.diagnostics],
   };
@@ -101,6 +104,12 @@ function addRegistration(registry: MutableRegistry, registration: PackageRegistr
     if (next.navigation.some((item) => item.id === navigation.id)) throw new Error(`Duplicate navigation id: ${navigation.id}`);
     next.navigation.push(navigation);
   }
+  for (const task of registration.tasks || []) {
+    if (!isValidTask(task)) throw new Error(`Invalid Task contribution from package ${metadata.id}.`);
+    const contributed = createActionTask(metadata, task, packageContext);
+    if (next.tasks.some((item) => item.id === contributed.id)) throw new Error(`Duplicate Task id: ${contributed.id}`);
+    next.tasks.push(contributed);
+  }
   if (next.packages.some((item) => item.id === registration.browser.id)) throw new Error(`Duplicate browser package id: ${registration.browser.id}`);
   next.packages.push(registration.browser);
   if (registration.dispose) next.disposers.push(registration.dispose);
@@ -112,7 +121,7 @@ function addRegistration(registry: MutableRegistry, registration: PackageRegistr
 export function createHost({ root = process.cwd(), appRoot = process.cwd(), config = defaultRepositoryConfig(), memberConfig, packages = [], diagnostics = [], warn = console.warn, telemetry = createTelemetry({ root }) }: { root?: string | URL; appRoot?: string | URL; config?: RepositoryConfig; memberConfig?: { packages: Record<string, PackageInput> }; packages?: PackageDefinition[]; diagnostics?: PackageDiagnostic[]; warn?: (message: string) => void; telemetry?: TelemetryController } = {}): HostRegistry {
   const repositoryRoot = toPath(root); const applicationRoot = toPath(appRoot);
   const context = createContext(repositoryRoot, applicationRoot, telemetry);
-  const mutable: MutableRegistry = { context, routes: Object.create(null), assets: Object.create(null), navigation: [], packages: [], disposers: [], diagnostics: [...diagnostics] };
+  const mutable: MutableRegistry = { context, routes: Object.create(null), assets: Object.create(null), navigation: [], packages: [], tasks: [], disposers: [], diagnostics: [...diagnostics] };
   const seenPackages = new Set<string>();
   for (const definition of packages) {
     const scope = definition.scope || 'team';
@@ -141,18 +150,26 @@ export function createHost({ root = process.cwd(), appRoot = process.cwd(), conf
   const navigation = Object.freeze([...mutable.navigation].sort((left, right) => left.order - right.order || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0)).map((item) => Object.freeze({ ...item })));
   const packageManifest = Object.freeze(mutable.packages.map((item) => Object.freeze({ ...item })));
   const packageDiagnostics = Object.freeze(mutable.diagnostics.map((item) => Object.freeze({ ...item })));
+  const actionManager = new ActionManager(new Map(mutable.tasks.map((task) => [task.id, task])));
+  if (mutable.tasks.length) for (const contribution of actionManager.routes()) {
+    const key = routeKey(contribution.method, contribution.path);
+    if (mutable.routes[key]) throw new Error(`Reserved Resonance Actions route is already registered: ${contribution.path}`);
+    mutable.routes[key] = { method: contribution.method, path: contribution.path, handler: (request, response) => contribution.handler(request, response) };
+  }
   const manifest = Object.freeze({
     version: MANIFEST_VERSION,
     repository: Object.freeze(repositoryPresentation(repositoryRoot, config.repository)),
     runtime: Object.freeze({ version: runtimeVersion(applicationRoot) }),
     navigation,
     packages: packageManifest,
+    ...(mutable.tasks.length ? { actions: Object.freeze({ tasks: '/api/actions/tasks' }) } : {}),
     ...(packageDiagnostics.length ? { diagnostics: packageDiagnostics } : {}),
   });
   let disposed = false;
   async function dispose(): Promise<void> {
     if (disposed) return;
     disposed = true;
+    await actionManager.dispose();
     for (const cleanup of [...mutable.disposers].reverse()) {
       try { await cleanup(); }
       catch (error) { warn(`Package cleanup failed: ${error instanceof Error ? error.message : String(error)}`); }

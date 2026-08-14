@@ -1,10 +1,11 @@
-export function createShell({ documentRoot = document, navigation, mount, home }) {
+export function createShell({ documentRoot = document, navigation, mount, home, actions }) {
   const roots = new Map();
+  let actionController = actions;
   const packages = new Map();
   let activeId = null;
   let homeId = null;
 
-  function renderNavigation(items) {
+  function renderNavigation(items, actionItems = []) {
     navigation.querySelectorAll('[data-package], [data-package-section]').forEach((element) => element.remove());
     const team = items.filter((item) => item.scope !== 'member');
     const personal = items.filter((item) => item.scope === 'member');
@@ -24,6 +25,10 @@ export function createShell({ documentRoot = document, navigation, mount, home }
       });
     };
     renderSection('Team Workspaces', team); renderSection('Personal Workspaces', personal);
+    if (actionItems.length) {
+      const heading = documentRoot.createElement('p'); heading.className = 'nav-section-label nav-section-spaced'; heading.dataset.packageSection = 'resonance-actions'; heading.textContent = 'Resonance Actions'; navigation.append(heading);
+      actionItems.forEach((item) => { const button = documentRoot.createElement('button'); button.className = 'primary-nav-item'; button.type = 'button'; button.dataset.package = 'resonance-actions'; button.dataset.actionTask = item.id; button.innerHTML = `<span class="nav-index">${String(++index).padStart(2, '0')}</span><span></span>`; button.lastElementChild.textContent = item.label; navigation.append(button); });
+    }
   }
 
   function setActive(id) {
@@ -87,6 +92,7 @@ export function createShell({ documentRoot = document, navigation, mount, home }
     if (!button || !navigation.contains(button)) return;
     try {
       await activate(button.dataset.package);
+      if (button.dataset.actionTask && actionController?.selectTask) await actionController.selectTask(button.dataset.actionTask);
     } catch (error) {
       const root = roots.get(button.dataset.package);
       if (root) showError(root, error);
@@ -109,6 +115,7 @@ export function createShell({ documentRoot = document, navigation, mount, home }
       homeId = id;
       if (home) home.disabled = !id;
     },
+    setActions(instance) { actionController = instance; },
     registerPackage(id, instance) { packages.set(id, instance); },
     createMount(id) {
       const root = documentRoot.createElement('section');

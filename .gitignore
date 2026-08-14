@@ -8,4 +8,4 @@ node_modules/
 .resonance/.env
 .resonance/member-config.json
 .resonance/member-state/
-.resonance/state/doctor/
+.resonance/state/

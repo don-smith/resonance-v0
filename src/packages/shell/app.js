@@ -101,7 +101,15 @@ export async function startApplication({ documentRoot = document, windowRoot = g
   const home = documentRoot.querySelector('[data-shell-home]');
   if (!navigation || !mount) throw new Error('Shell mount is missing.');
 
-  const shell = createShell({ documentRoot, navigation, mount, home });
+  let actionItems = [];
+  let actions = null;
+  if (manifest.actions?.tasks) {
+    try {
+      const actionResponse = await fetchFn(manifest.actions.tasks);
+      if (actionResponse.ok) actionItems = (await actionResponse.json()).tasks || [];
+    } catch (error) { console.warn(`Unable to load Resonance Actions: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+  const shell = createShell({ documentRoot, navigation, mount, home, actions: null });
   for (const diagnostic of manifest.diagnostics || []) {
     const notice = documentRoot.createElement('p');
     notice.className = 'shell-diagnostic'; notice.dataset.packageDiagnostic = diagnostic.id;
@@ -128,13 +136,26 @@ export async function startApplication({ documentRoot = document, windowRoot = g
   const homeId = packages.has('home') ? 'home' : null;
   shell.setHomePackage(homeId);
   const workspaceNavigation = manifest.navigation.filter((item) => item.id !== homeId && packages.has(item.id));
-  shell.renderNavigation(workspaceNavigation);
-  const initialId = homeId || workspaceNavigation[0]?.id;
+  if (actionItems.length) {
+    try {
+      loadStylesheet(documentRoot, 'resonance-actions', '/assets/shell/actions.css');
+      const loaded = await import('/assets/shell/actions.js');
+      const factory = loaded.default;
+      if (typeof factory !== 'function') throw new Error('Invalid Resonance Actions browser module.');
+      const actionRoot = shell.createMount('resonance-actions');
+      actions = factory({ fetchFn, eventSourceFactory, initialTasks: actionItems, onTasksChanged: (nextTasks) => { actionItems = nextTasks; shell.renderNavigation(workspaceNavigation, actionItems); } });
+      actions.mount(actionRoot);
+      shell.setActions(actions);
+      shell.registerPackage('resonance-actions', actions);
+    } catch (error) { console.warn(`Skipping Resonance Actions: ${error instanceof Error ? error.message : String(error)}`); actionItems = []; }
+  }
+  shell.renderNavigation(workspaceNavigation, actionItems);
+  const initialId = homeId || workspaceNavigation[0]?.id || (actions ? 'resonance-actions' : null);
   if (initialId) {
     try { await shell.activate(initialId); }
     catch { /* keep Shell usable when a package activation fails */ }
   }
-  return { manifest, packages, activate: shell.activate, theme };
+  return { manifest, packages, actions, activate: shell.activate, theme };
 }
 
 if (!globalThis.__RESONANCE_TEST__) {

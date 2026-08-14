@@ -9,6 +9,7 @@ Resonance is composed from package folders under `src/packages/<package-id>`:
 - **Shell** owns navigation, workspace mounts, the fixed browser bootstrap, shared layout, and repository-title access to Home.
 - **Home** renders the configured repository landing source (`README.md` by default, or repository-owned Markdown/HTML) without adding a workspace navigation item.
 - **Documentation** owns Markdown discovery, tree navigation, and document rendering.
+- **Resonance Actions** is a generic Shell surface for package-owned Tasks. Enabled packages contribute evaluation, skills, bounded operations, previews, confirmation, validation, and dismissal semantics without implementing another agent UI.
 
 A **package** is Resonance's general extensibility and implementation unit. A **workspace** is a user-visible surface listed in workspace navigation and mounted by Shell. Documentation, Architecture, and Backlog provide workspaces; Home is the repository landing page opened from the repository title, and Shell is infrastructure. Member packages are external packages selected per developer. Package terminology remains authoritative for source folders, manifest entries, package IDs, routes, assets, contracts, and the authoring CLI.
 
@@ -106,7 +107,7 @@ Add a repository-owned HTML fragment such as `.resonance/home.html`, scope its s
 
 Home accepts relative `.md`, `.markdown`, `.html`, and `.htm` sources. Markdown is rendered safely; HTML is trusted repository-owned markup inserted unchanged. Package responsibilities are documented in `src/packages/shell/README.md`, `src/packages/home/README.md`, and `src/packages/documentation/README.md`.
 
-Package routes are canonical under `/api/<package-id>/...`; Documentation uses `/api/documentation/tree` and `/api/documentation/document`. Package assets retain `/assets/<package-id>/...` public URLs while their physical files resolve from the owning team or member repository. Shell presents team navigation before personal member navigation.
+Package routes are canonical under `/api/<package-id>/...`; Documentation uses `/api/documentation/tree` and `/api/documentation/document`. Resonance Actions uses host-owned `/api/actions/...` transport for package-qualified Tasks. Package assets retain `/assets/<package-id>/...` public URLs while their physical files resolve from the owning team or member repository. Shell presents team navigation before personal member navigation, then Resonance Actions when Tasks are available.
 
 ## Develop resonance
 

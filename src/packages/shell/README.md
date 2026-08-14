@@ -12,6 +12,7 @@ The Shell package owns the application frame. It provides the stable page docume
 - Activate and deactivate package instances without owning their internal state.
 - Serve the Shell entrypoint and shared stylesheet.
 - Expose composition metadata through the host manifest without owning package routes.
+- Present the generic Resonance Actions section after Personal Workspaces when enabled packages report Tasks; Task evaluation and side effects remain package-owned.
 
 ## Configuration
 
@@ -46,6 +47,7 @@ The configured module must load successfully and default-export the Shell packag
 - `theme-bootstrap.js` — synchronous persisted-theme bootstrap that runs before the shared stylesheet to avoid a mismatched first paint.
 - `app.js` — browser coordinator, theme controller, and manifest bootstrap.
 - `shell.js` — navigation, mount creation, activation, and rollback behavior.
+- `actions.js` / `actions.css` — the shared Task conversation, preview, confirmation, cancellation, and dismissal surface.
 - `styles.css` — shared design tokens and Shell layout.
 - `index.ts` — Shell route-free registration and compatibility assets.
 

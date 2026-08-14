@@ -10,6 +10,7 @@ The Home package provides the repository landing page. It reads the configured s
 - Render Markdown with the safe shared Markdown renderer.
 - Insert repository-owned HTML sources unchanged so a repository can provide a distinct landing page with scoped styles.
 - Serve `/api/home` and the Home browser assets.
+- Contribute the package-owned `create-home-page` onboarding Task when the default or invalid source still needs curation.
 - Contribute no workspace navigation item; Shell makes its repository title clickable when Home loads successfully.
 
 ## Configuration
@@ -33,6 +34,12 @@ Configure Home as an entry in the repository manifest’s `packages` object:
 - `source` is optional and defaults to `README.md`. It must be a non-empty relative path ending in `.md`, `.markdown`, `.html`, or `.htm`; the host only reads files contained in the repository root.
 
 Home reads the configured source through the host repository-containment boundary. Markdown is safely rendered to HTML; HTML is trusted repository-owned markup and is inserted unchanged. Omit Home from `packages`, or set `enabled` to `false`, when the landing-page surface is not needed. Without Home, Shell renders the repository title as a non-clickable control.
+
+## Home onboarding Task
+
+When Home is configured with the default `README.md` source, or its configured source is missing or invalid, Home contributes `home:create-home-page` to Resonance Actions. The Task owns its bounded documentation discovery policy and excludes dependencies, generated directories, repository internals, credentials, and unreadable files. It prepares a Markdown preview with source-document links and affected paths, then requires explicit confirmation before atomically writing `.resonance/home.md` and updating the Home package source. Existing custom sources are never overwritten. Runtime validation re-reads the configured source through the same containment and rendering rules used by Home; completion is evidence-based and dismissal is stored separately in package state.
+
+The Task uses the generic Resonance Actions session and exposes only its Home curation skill and operations. It does not receive shell, network, credentials, or unrestricted filesystem access.
 
 ## Ownership boundary
 
