@@ -53,6 +53,10 @@ decisions:
     status: in-planning
     priority: P1
   - title: Architecture authoring skill
+    plan: plans/architecture-authoring-skill.md
     status: in-planning
     priority: P1
-    plan: plans/architecture-authoring-skill.md
+  - title: Team Resonance
+    status: in-planning
+    priority: P1
+    plan: plans/team-resonance.md
