@@ -13,8 +13,7 @@ Use the repository's documentation to explain, in plain language:
 
 - what the project is and what problem it solves;
 - who it is for and how it is used;
-- its strengths, distinctive ideas, and important capabilities;
-- how a developer gets started; and
+- its strengths, distinctive ideas, and important capabilities; and
 - why the project is worth caring about.
 
 The page is the project's welcome surface, not an evidence report. Do not put dates, authors, citations, source labels, filenames, repository paths, or a documentation bibliography in the page. Use the evidence to write the copy, but keep the evidence invisible to visitors.
