@@ -33,6 +33,7 @@ test('mounts the packaged Architecture skills at the agent skill path', async ()
   const likec4Skill = await readFile(new URL('./skills/likec4-dsl/SKILL.md', import.meta.url), 'utf8');
   const structuralViewSkill = await readFile(new URL('./skills/code-structural-view/SKILL.md', import.meta.url), 'utf8');
   const explainSkill = await readFile(new URL('./skills/explain/SKILL.md', import.meta.url), 'utf8');
+  const writeAdrSkill = await readFile(new URL('./skills/write-adr/SKILL.md', import.meta.url), 'utf8');
   assert.match(likec4Skill, /^---\nname: likec4-dsl\n/);
   assert.match(structuralViewSkill, /^---\nname: code-structural-view\n/);
   assert.match(structuralViewSkill, /functionName = code "functionName\(\)"/);
@@ -40,12 +41,16 @@ test('mounts the packaged Architecture skills at the agent skill path', async ()
   assert.match(explainSkill, /^---\nname: explain\n/);
   assert.match(explainSkill, /read_model.*read_view/s);
   assert.match(explainSkill, /Modeled intent/);
-  const backend = createPackagedSkillBackend({ 'likec4-dsl': likec4Skill, 'code-structural-view': structuralViewSkill, explain: explainSkill });
-  assert.deepEqual(backend.ls('/skills'), { files: [{ path: '/skills/code-structural-view/', is_dir: true }, { path: '/skills/explain/', is_dir: true }, { path: '/skills/likec4-dsl/', is_dir: true }] });
+  assert.match(writeAdrSkill, /^---\nname: write-adr\n/);
+  assert.match(writeAdrSkill, /# ADR-NNN: Short decision title/);
+  assert.match(writeAdrSkill, /architecture\/decisions\.json/);
+  const backend = createPackagedSkillBackend({ 'likec4-dsl': likec4Skill, 'code-structural-view': structuralViewSkill, explain: explainSkill, 'write-adr': writeAdrSkill });
+  assert.deepEqual(backend.ls('/skills'), { files: [{ path: '/skills/code-structural-view/', is_dir: true }, { path: '/skills/explain/', is_dir: true }, { path: '/skills/likec4-dsl/', is_dir: true }, { path: '/skills/write-adr/', is_dir: true }] });
   assert.deepEqual(backend.ls('/skills/code-structural-view'), { files: [{ path: '/skills/code-structural-view/SKILL.md', is_dir: false }] });
   assert.deepEqual(backend.read('/skills/code-structural-view/SKILL.md'), { content: structuralViewSkill, mimeType: 'text/markdown' });
   assert.deepEqual(backend.read('/skills/explain/SKILL.md'), { content: explainSkill, mimeType: 'text/markdown' });
   assert.deepEqual(backend.read('/skills/likec4-dsl/SKILL.md'), { content: likec4Skill, mimeType: 'text/markdown' });
+  assert.deepEqual(backend.read('/skills/write-adr/SKILL.md'), { content: writeAdrSkill, mimeType: 'text/markdown' });
   assert.match(String(backend.read('/skills/c4-architecture/SKILL.md').error), /Permission denied/);
 });
 
