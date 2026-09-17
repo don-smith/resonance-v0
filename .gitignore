@@ -1,6 +1,7 @@
 .DS_Store
 node_modules/
 .myflow/
+.ignore
 .resonance/backlog-agent.env
 .resonance/home-agent.env
 .resonance/documentation-agent.env
